@@ -4,8 +4,8 @@
 > 打开这个文件就能接上进度。**每完成一个里程碑或重要步骤后更新它。**
 >
 > 最后更新：2026-10-18 深夜（**0.1.5**：回退 0.1.4 悬浮层 —— 设置页恢复普通 Activity，体验对齐 0.1.3/搜狗；
-> 0.1.4 悬浮层被用户否决（挡上划回桌面）。保留 0.1.2 英文复位修复；模拟器自检沙箱已建成；
-> 此前 0.1.1（M5.1b 双修）；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
+> 设置卡片强停问题的根因已定位（桌面写死白名单，见 M5.1g），用户暂缓处理。保留 0.1.2 英文复位修复；
+> 模拟器自检沙箱已建成；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
 
 ### 项目改名：`shurufa` → `jianji`（2026-10-18 下午）
 - 资源管理器直接改名一直报「被占用」：占用者 = opencode 进程 ×2 + `adb.exe`（adb server 的 cwd 卡在文件夹里）。
@@ -95,6 +95,20 @@
   交付副本：`D:\Fish\Documents\简记输入法-v0.1.5.apk`（7,686,147 字节，
   sha256 `7f7f94e314272734b727426f0374fa5480601a3098759c0389a00da50871a900`）；旧 0.1.4 副本已删。
 - 后续可选（未做）：① 键盘内设置面板（齿轮路径彻底无卡片）；② `WRITE_SECURE_SETTINGS` 自动恢复默认输入法（需 adb 授权一次）。
+
+### M5.1g：设置卡片被强停 → 默认输入法复位的根因（2026-10-18 深夜，暂缓处理）
+- 现象：在最近任务里划掉简记设置卡片 → 默认输入法被复位（Sogou/QQ 同样操作不会）。
+- 根因（反编译 ZUI 桌面 `ZuiLauncher.apk` + 实机日志确认）：
+  - 桌面 `ActivityManagerWrapper.removeAppProcess()` 按写死在 APK 资源里的
+    `array/not_force_stop_package_list`（52 个包，含 QQ/微信/Sogou/讯飞/QQ拼音等）分流：
+    名单内 → `killBackgroundProcesses`（系统立即拉起，输入法不掉）；名单外 → `forceStopPackage`（包级强停）。
+  - 简记不在名单（资源写死，非用户白名单；不 root 改不了）→ 每次划卡都被包级强停 → 系统复位默认输入法。
+  - 另一个发现：桌面 `getRecentTasks` 对 `FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS` 只隐藏「非当前」任务 ——
+    从设置页直接呼出最近任务时卡片必然显示，`excludeFromRecents` 无用。
+- 已排除：分进程（`:ime` / `:settings` 均被包级强停一起杀）、安装来源（`-i` 伪 installer 无效）、
+  离开即关、齿轮入口等。
+- 遗留选项（未实施，用户暂缓）：A 自动恢复（`WRITE_SECURE_SETTINGS`，adb 授权一次）；B 键盘内设置面板（齿轮路径零卡片）；
+  C 双 APK 拆分（设置独立应用，最彻底）。「普通设置页 + 永不被强停」在 ZUI 上不存在。
 
 ### GitHub 公开仓库（2026-10-18 晚）
 - 仓库：**https://github.com/SwayFishLK/jianji**（PUBLIC，main，GPL-3.0-or-later）。
