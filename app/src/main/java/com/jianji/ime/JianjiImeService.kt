@@ -803,10 +803,9 @@ class JianjiImeService : InputMethodService() {
         if (close) setOverlay(Overlay.NONE) else updateRightButton()
     }
 
-    /** 面板里的「设置」：收起键盘并打开悬浮设置页（不产生最近任务卡片，见 SettingsOverlay） */
+    /** 面板里的「设置」：打开正式设置页 */
     private fun openSettings() {
-        requestHideSelf(0)
-        SettingsOverlay.show(applicationContext)
+        startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     /** 系统剪贴板变化（Android 10+ 只在允许时回调）：立刻记入历史 */
