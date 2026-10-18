@@ -1,6 +1,6 @@
 package com.jianji.ime
 
-import android.app.Activity
+import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
@@ -24,16 +24,16 @@ object ImUi {
     val DANGER = 0xFFE08A8A.toInt()
     private val CARD_TEXT2 = 0xFFC6CDD9.toInt()
 
-    fun dp(a: Activity, v: Float): Int = (v * a.resources.displayMetrics.density).toInt()
+    fun dp(a: Context, v: Float): Int = (v * a.resources.displayMetrics.density).toInt()
 
-    fun rounded(a: Activity, color: Int, radiusDp: Float): GradientDrawable =
+    fun rounded(a: Context, color: Int, radiusDp: Float): GradientDrawable =
         GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(a, radiusDp).toFloat()
         }
 
     /** 「实现 MATCH_PARENT + 可选上/左/右间距」的布局参数 */
-    fun lp(a: Activity, topDp: Float, leftDp: Float = 0f, rightDp: Float = 0f): LinearLayout.LayoutParams =
+    fun lp(a: Context, topDp: Float, leftDp: Float = 0f, rightDp: Float = 0f): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -44,7 +44,7 @@ object ImUi {
         }
 
     /** 顶部标题栏：←（返回）+ 标题 */
-    fun header(a: Activity, title: String, onBack: () -> Unit): LinearLayout {
+    fun header(a: Context, title: String, onBack: () -> Unit): LinearLayout {
         val row = LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -74,14 +74,14 @@ object ImUi {
     }
 
     /** 分区小标题（accent 小字） */
-    fun sectionLabel(a: Activity, text: String): TextView = TextView(a).apply {
+    fun sectionLabel(a: Context, text: String): TextView = TextView(a).apply {
         this.text = text
         setTextColor(ACCENT)
         textSize = 13f
     }
 
     /** 组后的说明小字 */
-    fun note(a: Activity, text: String): TextView = TextView(a).apply {
+    fun note(a: Context, text: String): TextView = TextView(a).apply {
         this.text = text
         setTextColor(SUB)
         textSize = 12f
@@ -89,7 +89,7 @@ object ImUi {
     }
 
     /** 左侧圆形图标泡（accent ~15% 底 + 浅蓝图标） */
-    fun iconBubble(a: Activity, iconRes: Int): View {
+    fun iconBubble(a: Context, iconRes: Int): View {
         val size = dp(a, 40f)
         val box = LinearLayout(a).apply {
             gravity = Gravity.CENTER
@@ -112,7 +112,7 @@ object ImUi {
      * 危险文本等）与可选箭头。onClick 非空时整行可点。
      */
     fun cardRow(
-        a: Activity,
+        a: Context,
         iconRes: Int?,
         title: String? = null,
         subtitle: String? = null,
@@ -177,7 +177,7 @@ object ImUi {
     }
 
     /** accent 底白字小药丸按钮 */
-    fun pillButton(a: Activity, text: String, color: Int = ACCENT, onClick: () -> Unit): TextView =
+    fun pillButton(a: Context, text: String, color: Int = ACCENT, onClick: () -> Unit): TextView =
         TextView(a).apply {
             this.text = text
             setTextColor(0xFFFFFFFF.toInt())
@@ -190,19 +190,19 @@ object ImUi {
         }
 
     /** 右侧灰色值文本（如「英语」） */
-    fun valueText(a: Activity): TextView = TextView(a).apply {
+    fun valueText(a: Context): TextView = TextView(a).apply {
         setTextColor(SUB)
         textSize = 14f
     }
 
     /** 右侧副标题级文本（与 cardRow 的 subtitle 同字号，用于动态刷新） */
-    fun subTextView(a: Activity): TextView = TextView(a).apply {
+    fun subTextView(a: Context): TextView = TextView(a).apply {
         setTextColor(SUB)
         textSize = 12.5f
     }
 
     /** 右侧危险操作文本（如「清空」「删除」） */
-    fun dangerText(a: Activity, text: String, onClick: () -> Unit): TextView = TextView(a).apply {
+    fun dangerText(a: Context, text: String, onClick: () -> Unit): TextView = TextView(a).apply {
         this.text = text
         setTextColor(DANGER)
         textSize = 14f
@@ -213,7 +213,7 @@ object ImUi {
     }
 
     /** 许可页卡片内正文（浅灰、可选中） */
-    fun licenseBody(a: Activity, text: String): TextView = TextView(a).apply {
+    fun licenseBody(a: Context, text: String): TextView = TextView(a).apply {
         this.text = text
         setTextColor(CARD_TEXT2)
         textSize = 11f
