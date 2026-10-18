@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">简记</string>
+    <string name="ime_name">简记输入法</string>
+    <string name="ime_placeholder">简记输入法\n（M0 空壳，键盘建设中）</string>
+</resources>

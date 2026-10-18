@@ -1,0 +1,8 @@
+# ????? LF?Windows ???? CRLF??????
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
+*.jar binary
+*.bin binary

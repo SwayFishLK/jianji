@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 方案 A「墨夜」配色 -->
+    <color name="ime_bg">#1C1F26</color>
+    <color name="ime_panel_bg">#17191E</color>
+    <color name="key_bg">#2A2E37</color>
+    <color name="key_pressed">#3A4150</color>
+    <color name="key_fn_bg">#232730</color>
+    <color name="key_text">#E6E8EC</color>
+    <color name="key_fn_text">#C6CDD9</color>
+    <color name="key_hint_text">#8B93A3</color>
+    <color name="accent">#5B8DEF</color>
+    <color name="accent_pressed">#4A7BE0</color>
+    <color name="cand_text">#EDEFF3</color>
+    <color name="cand_translation">#8B93A3</color>
+    <!-- 应用图标自适应背景（M5.1 方案 B：墨底蓝「简」） -->
+    <color name="ic_launcher_background">#17191E</color>
+</resources>

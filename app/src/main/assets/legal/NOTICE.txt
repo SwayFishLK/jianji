@@ -1,0 +1,48 @@
+简记（Jianji）输入法 · 署名与许可
+================================================
+
+简记在输入与候选过程中显示词条对应的英语 / 日语译词，词库、释义与面板数据来自
+「青简」开源项目。为尊重数据来源，署名如下。
+
+本应用以 GNU General Public License 3.0 或其后续版本（GPL-3.0-or-later）发布，
+完整许可全文见本页末尾。
+
+
+一、词库、释义与面板数据（「青简」qingjian）
+------------------------------------------------
+
+项目地址：https://github.com/qingjian-team/qingjian （GPL-3.0-or-later）
+
+本应用使用其数据：基础词库（dict）、释义表（glossary-en / glossary-ja /
+glossary-zh）、英文词表（english）、表情与颜文字面板（catalog），
+经 tools/dictgen 数据管线转换为应用内二进制资产，未改动内容。
+
+青简词库的上游来源（据其 assets/lexicon/README.md 与相关说明）：
+
+· 通用规范汉字表（8105 字）：iDvel 文字转录（The-Table-of-General-Standard-
+  Chinese-Characters），并与 shengdoushi 分级字表交叉核对；
+· 现代汉语常用词表：liuxilu 校对版（Proofread-Modern-Chinese-Common-Lexicon）；
+· 领域词：THUOCL（清华大学自然语言处理实验室，MIT 许可，声明见《第三方声明》）；
+· 英语词表：English Speller Database（Kevin Atkinson，宽松许可）、CSpell
+  software-terms（MIT）、typos（MIT），声明见《第三方声明》；
+· 读音与词频：Unihan（Unicode License）、中文维基（CC BY-SA 4.0）、
+  LCCC（MIT）等，青简已按上游要求署名；
+· 释义表：由青简以 LLM 离线批量生成，不含第三方词典内容；
+· 表情、颜文字及中文名：Unicode emoji-test 与 Unicode CLDR
+  （Unicode License v3，全文见《Unicode License》）。
+
+候选字体与界面文字跟随系统字体，未随发布包分发第三方字体。
+
+
+二、开源软件组件
+------------------------------------------------
+
+· androidx.core:core-ktx — Apache License 2.0
+  （Copyright The Android Open Source Project）
+· org.jetbrains.kotlin:kotlin-stdlib — Apache License 2.0
+  （Copyright JetBrains s.r.o.）
+· org.jetbrains.kotlinx:kotlinx-coroutines-android — Apache License 2.0
+  （Copyright JetBrains s.r.o.）
+
+许可全文见本页之后：《GNU GPL v3》《Unicode License v3》《第三方声明》
+《Apache License 2.0》。

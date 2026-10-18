@@ -1,0 +1,11 @@
+[versions]
+agp = "9.4.1"
+androidxCoreKtx = "1.19.1"
+kotlinxCoroutines = "1.11.0"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCoreKtx" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }

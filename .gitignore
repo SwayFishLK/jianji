@@ -1,0 +1,29 @@
+# 构建产物
+.gradle/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 本地配置
+local.properties
+
+# 临时开发环境（可随时整个删除）
+.dev-env/
+
+# 外部参考资料仓库（不打包、不进版本库）
+reference/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 发布签名（务必备份：丢失后已装应用无法覆盖升级）
+keystore/
+keystore.properties

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true">
+
+        <!-- 输入法核心服务（M0 空壳，M1 起为自绘键盘） -->
+        <service
+            android:name=".JianjiImeService"
+            android:exported="true"
+            android:label="@string/ime_name"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:settingsActivity="com.jianji.ime.SettingsActivity">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/ime_method" />
+        </service>
+
+        <!-- 正式设置页（M4）：桌面图标 + 输入法选择器齿轮 + 剪贴板面板入口 -->
+        <!-- excludeFromRecents：不进入「最近任务」——本机 ROM 清理后台卡片 = 强制停止整个包，会复位默认输入法 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 开源许可页（M5）：署名 NOTICE + 各许可全文 -->
+        <activity
+            android:name=".LicensesActivity"
+            android:exported="false"
+            android:label="开源许可"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+    </application>
+
+</manifest>
