@@ -24,6 +24,9 @@ class SettingsActivity : Activity() {
     private lateinit var clipCountText: TextView
     private lateinit var langValueText: TextView
 
+    /** 正在跳转「开源许可」页（同任务内的正常导航，不算离开设置页） */
+    private var navigatingToLicense = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())
@@ -31,9 +34,20 @@ class SettingsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        navigatingToLicense = false
         updateLangValue()
         refreshPhrases()
         refreshClipCount()
+    }
+
+    /**
+     * 离开设置页（回桌面 / 呼出最近任务 / 切到别的应用）时立即关闭自己。
+     * 原因：本机 ROM 会把「移除最近任务里的卡片」当成强制停止，连带复位默认输入法；
+     * 设置页用过即销毁 → 最近任务里永远没有简记卡片 → 怎么清后台都碰不到输入法（对齐搜狗的行为）。
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!navigatingToLicense) finish()
     }
 
     // —————— 布局 ——————
@@ -175,7 +189,10 @@ class SettingsActivity : Activity() {
                 title = "开源许可与署名",
                 subtitle = "GPL-3.0-or-later · 词库数据来自「青简」",
                 chevron = true,
-            ) { startActivity(Intent(this, LicensesActivity::class.java)) },
+            ) {
+                navigatingToLicense = true
+                startActivity(Intent(this, LicensesActivity::class.java))
+            },
             ImUi.lp(this, 8f),
         )
         box.addView(

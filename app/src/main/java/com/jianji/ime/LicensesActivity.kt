@@ -13,6 +13,12 @@ import android.widget.TextView
  */
 class LicensesActivity : Activity() {
 
+    /** 离开许可页 = 整个设置任务关闭（避免任务残留进最近任务，见 SettingsActivity.onUserLeaveHint） */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        finishAffinity()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())

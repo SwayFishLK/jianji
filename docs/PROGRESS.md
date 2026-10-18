@@ -3,8 +3,9 @@
 > 这是给「未来的自己」看的项目状态快照：即使对话记忆被压缩或丢失，
 > 打开这个文件就能接上进度。**每完成一个里程碑或重要步骤后更新它。**
 >
-> 最后更新：2026-10-18 晚（**0.1.2**：英文模式跨会话残留 + 设置页被清后台导致默认输入法复位，双修已上机；
-> 模拟器自检沙箱已建成；此前 0.1.1（M5.1b 双修）；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
+> 最后更新：2026-10-18 晚（**0.1.3**：设置页「用过即焚」，最近任务里再无简记卡片、清后台不复位输入法；
+> 0.1.2 英文复位修复保留。模拟器自检沙箱已建成；此前 0.1.1（M5.1b 双修）；
+> `.dev-env` 保留 —— 用户明确：必须等他说清才清）
 
 ### 项目改名：`shurufa` → `jianji`（2026-10-18 下午）
 - 资源管理器直接改名一直报「被占用」：占用者 = opencode 进程 ×2 + `adb.exe`（adb server 的 cwd 卡在文件夹里）。
@@ -40,18 +41,32 @@
 - **② 清后台导致默认输入法被复位**：打开设置页后，在最近任务里清掉它，ROM 会把默认输入法踢回系统键盘。
   根因两层：设置页从键盘齿轮以 NEW_TASK 拉起 → 出现在最近任务；本机 ROM 清理后台卡片 = **强制停止整个包**，
   而本机在 IME 被 force-stop 时会复位默认输入法（与既有「不要 am force-stop」坑同源）。
-  修复 = `SettingsActivity` 加 `android:excludeFromRecents="true"`（设置页不进最近任务，清不到卡片；清理路径失效）。
+  修复（0.1.2 初版）= `SettingsActivity` 加 `android:excludeFromRecents="true"`（不进最近任务；清理路径失效）。
+  **实测在 ZUI 上不充分**：从设置页前台直接呼出最近任务时，当前任务仍被强制展示、可被划掉 → 见 M5.1d。
   模拟器验证：齿轮打开设置正常；最近任务里无「简记」卡片（intent 带 `FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS`）。
   残留风险：系统设置里的「强行停止」仍会复位默认输入法 —— ROM 行为，App 侧无法规避。
 - 版本：0.1.2（versionCode 3）；已覆盖安装到手机（默认输入法保持简记、数据保留）。
   交付副本：`D:\Fish\Documents\简记输入法-v0.1.2.apk`（7,686,015 字节，
   sha256 `0a2597b077e6c93c5128e63ab64868258e79cff421f9177376971b3538f1d264`）；旧 0.1.1 副本已删。
 
+### M5.1d：设置页「用过即焚」——最近任务里永不出现简记卡片（0.1.3，2026-10-18 晚，已上机验证）
+- 用户反馈：0.1.2 的 excludeFromRecents 无效——打开设置页后清掉卡片，默认输入法仍被复位。
+- 实机取证（手机 logcat）：触发动作 = 最近任务里**划掉简记卡片**；日志 `Killing ... (adj 200): remove task`
+  + `Force stopping com.jianji.ime ... : from pid 8329`（8329 = ZUI 桌面/最近任务进程）。本机对 IME 强制停止 → 默认输入法复位。
+  ZUI 会**忽略 excludeFromRecents**：从设置页前台直接呼出最近任务时当前任务必被展示（从桌面进则确实隐藏）。
+- 修复（对齐搜狗：后台根本没有卡片）：
+  - `SettingsActivity.onUserLeaveHint()` → `finish()`：离开设置页（回桌面/呼出最近任务/切走）即销毁，任务不存在 → 无卡片；
+  - 「开源许可」同任务跳转用 `navigatingToLicense` 豁免；`LicensesActivity.onUserLeaveHint()` → `finishAffinity()`。
+- 实机验证：设置页前台直接呼出最近任务 → 无卡片、输入法保持、进程存活；随后划屏无误杀；许可页进出正常。
+- 版本 0.1.3（versionCode 4）；已覆盖安装到手机。
+  交付副本：`D:\Fish\Documents\简记输入法-v0.1.3.apk`（7,686,131 字节，
+  sha256 `8b62927dbb6176d826789c4a3e8fb51aba47f212623778ea9a218c1b278aea91`）；旧 0.1.2 副本已删。
+
 ### GitHub 公开仓库（2026-10-18 晚）
 - 仓库：**https://github.com/SwayFishLK/jianji**（PUBLIC，main，GPL-3.0-or-later）。
 - 首个提交 `1e82035`「简记 0.1.2 初始提交」：99 个文件 / 16.5MB（源码 + 词库 + 文档）。
-- **Release v0.1.2**：https://github.com/SwayFishLK/jianji/releases/tag/v0.1.2
-  （附件 `jianji-v0.1.2.apk`，7,686,015 字节，sha256 与交付副本一致）。
+- **Release v0.1.3**：https://github.com/SwayFishLK/jianji/releases/tag/v0.1.3
+  （附件 `jianji-v0.1.3.apk`，7,686,131 字节，sha256 与交付副本一致；v0.1.2 因修复不完整已删除）。
 - 已排除（`.gitignore`）：`keystore/`、`keystore.properties`、`local.properties`、`.dev-env/`、`reference/`、`build/` 等；
   AGENTS/PROGRESS 中的手机序列号已脱敏。
 - 补充：`LICENSE`（GPL-3.0 全文，取自 `assets/legal`）、`.gitattributes`（LF 统一）；gh CLI 已登录（SwayFishLK，凭据在系统 keyring）。
