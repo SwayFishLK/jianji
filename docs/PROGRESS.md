@@ -47,6 +47,14 @@
   交付副本：`D:\Fish\Documents\简记输入法-v0.1.2.apk`（7,686,015 字节，
   sha256 `0a2597b077e6c93c5128e63ab64868258e79cff421f9177376971b3538f1d264`）；旧 0.1.1 副本已删。
 
+### GitHub 公开仓库（2026-10-18 晚）
+- 仓库：**https://github.com/SwayFishLK/jianji**（PUBLIC，main，GPL-3.0-or-later）。
+- 首个提交 `1e82035`「简记 0.1.2 初始提交」：99 个文件 / 16.5MB（源码 + 词库 + 文档）。
+- 已排除（`.gitignore`）：`keystore/`、`keystore.properties`、`local.properties`、`.dev-env/`、`reference/`、`build/` 等；
+  AGENTS/PROGRESS 中的手机序列号已脱敏。
+- 补充：`LICENSE`（GPL-3.0 全文，取自 `assets/legal`）、`.gitattributes`（LF 统一）；gh CLI 已登录（SwayFishLK，凭据在系统 keyring）。
+- 推送：`git add -A; git commit -m "..."` → `git push`（repo 内已配代理 + 凭据助手，直接可用）。
+
 ## 当前里程碑：M5.1 收尾（设置页改版 / 候选字体跟随系统 / 应用图标，均已上机；待用户验收）
 
 ### M5.1：设置页卡片风格 + 候选字体跟随系统 + 应用图标 B（2026-10-17 深夜二轮，已上机验证，待用户验收）
