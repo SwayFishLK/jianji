@@ -27,3 +27,6 @@ Thumbs.db
 # 发布签名（务必备份：丢失后已装应用无法覆盖升级）
 keystore/
 keystore.properties
+
+# 本地 Agent 约定（不公开）
+AGENTS.md
