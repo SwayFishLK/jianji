@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 按键振动强度三档（弱/标准/强）：系统触感常量强度写死，只有振动器 API 能调强弱。
+         普通权限，安装即授予、无弹窗；应用依旧无网络权限、零联网。 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

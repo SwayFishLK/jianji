@@ -26,25 +26,50 @@ class GlossDict private constructor(
     /** 词 → 显示用译文；没有该词返回 null。结果做小缓存（网格面板与候选栏会重复问）。 */
     fun annotationFor(w: String): String? {
         cache[w]?.let { return it }
+        val i = indexOf(w)
+        if (i >= 0) {
+            val s = format(i)
+            if (s != null) {
+                if (cache.size >= 4096) cache.clear()
+                cache[w] = s
+            }
+            return s
+        }
+        return null
+    }
+
+    /**
+     * 词的「可输入形态」：只取第一条义项，去词性、去振假名注音。
+     * 你好 → hello；开发 → 開発する。候选上划上屏译文 / 生词等级查询用。
+     */
+    fun inputFormFor(w: String): String? {
+        inputCache[w]?.let { return it }
+        val i = indexOf(w)
+        if (i < 0) return null
+        val s = senseStart[i]
+        if (s >= senseStart[i + 1]) return null
+        val t = stringAt(textOff[s], textLen[s].toInt())
+        if (t.isEmpty()) return null
+        if (inputCache.size >= 4096) inputCache.clear()
+        inputCache[w] = t
+        return t
+    }
+
+    /** 词在表里的下标（整块二分）；没有 → -1 */
+    private fun indexOf(w: String): Int {
         val q = w.toByteArray(Charsets.UTF_8)
         var lo = 0
         var hi = size - 1
         while (lo <= hi) {
             val mid = (lo + hi) ushr 1
             val c = compare(word, wordOff[mid], wordOff[mid + 1], q)
-            if (c < 0) lo = mid + 1 else if (c > 0) hi = mid - 1 else {
-                val s = format(mid)
-                if (s != null) {
-                    if (cache.size >= 4096) cache.clear()
-                    cache[w] = s
-                }
-                return s
-            }
+            if (c < 0) lo = mid + 1 else if (c > 0) hi = mid - 1 else return mid
         }
-        return null
+        return -1
     }
 
     private val cache = HashMap<String, String>()
+    private val inputCache = HashMap<String, String>()
 
     private fun format(i: Int): String? {
         val sb = StringBuilder()

@@ -18,13 +18,17 @@ import kotlin.math.abs
  * 候选栏（键盘上方 56dp 预留区）：双行候选格横向滚动。
  * M2 只画词面（translation 为 null）；M3 起在词面上方补译文小字。
  * 自绘 + OverScroller，与 KeyboardView 同一套手感（拖动 / 惯性 / 点选）。
+ * v0.2：候选上划 = 上屏该候选的译文；右上角生词等级角标（mark）。
  */
 class CandidateBar(context: Context) : View(context) {
 
-    data class Item(val word: String, val translation: String? = null)
+    data class Item(val word: String, val translation: String? = null, val mark: String? = null)
 
     /** 点选回调：下标对应最近一次 setItems 的列表 */
     var onSelect: ((Int) -> Unit)? = null
+
+    /** 上划回调：上划候选格 = 上屏对应译文（下标同 setItems） */
+    var onSwipeUp: ((Int) -> Unit)? = null
 
     private val items = ArrayList<Item>()
     private val widths = ArrayList<Float>()
@@ -59,6 +63,12 @@ class CandidateBar(context: Context) : View(context) {
         textSize = trSize
     }
 
+    /** 生词等级角标（右上角小字） */
+    private val markPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.RIGHT
+        textSize = dp(9.5f)
+    }
+
     /** 首选候选的高亮药丸（对齐视觉稿 .cand.sel：accent 16% 底 + 50% 描边） */
     private val selFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -76,6 +86,9 @@ class CandidateBar(context: Context) : View(context) {
     private var downY = 0f
     private var downScroll = 0f
     private var dragging = false
+
+    /** 上划判定位移（点选 vs 上划译文） */
+    private val swipeUpSlop = dp(26f)
 
     init {
         isClickable = true
@@ -150,6 +163,13 @@ class CandidateBar(context: Context) : View(context) {
                     canvas.drawText(tr, cx, h * 0.34f - (fmT.ascent + fmT.descent) / 2f, trPaint)
                     canvas.drawText(item.word, cx, h * 0.70f - (fmW.ascent + fmW.descent) / 2f, wordPaint)
                 }
+                // 生词等级角标（B2 / N1 之类，右上角；入门级不标）
+                val mk = item.mark
+                if (mk != null) {
+                    markPaint.color = ImTheme.candMark
+                    val fmM = markPaint.fontMetrics
+                    canvas.drawText(mk, x + w - dp(6f), h * 0.22f - (fmM.ascent + fmM.descent) / 2f, markPaint)
+                }
             }
             x += w + gap
         }
@@ -196,8 +216,13 @@ class CandidateBar(context: Context) : View(context) {
                 if (!dragging) {
                     val idx = indexAt(event.x)
                     if (idx >= 0) {
-                        onSelect?.invoke(idx)
-                        performClick()
+                        if (downY - event.y > swipeUpSlop) {
+                            // 上划 = 上屏该候选对应的译文（没有译文的由 Service 忽略）
+                            onSwipeUp?.invoke(idx)
+                        } else {
+                            onSelect?.invoke(idx)
+                            performClick()
+                        }
                     }
                 } else {
                     velocityTracker?.computeCurrentVelocity(1000)

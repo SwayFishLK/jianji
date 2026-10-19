@@ -19,7 +19,8 @@ import kotlin.math.ln
  */
 class FlatPinyinEngine(
     private val dict: JianDict,
-    private val userCount: (String) -> Int = { 0 },
+    private val userBoost: (String) -> Float = { 0f },
+    private val fuzzyMask: () -> Int = { 0 },
 ) : PinyinEngine {
 
     override fun candidates(query: String, limit: Int): List<Candidate> {
@@ -33,6 +34,9 @@ class FlatPinyinEngine(
         if (q.length >= 3) scanBoundary(q, best)
         // 主路径一无所获时（输入比词更长，如 jjjjj）：按前缀逐级找完全简拼匹配
         if (best.isEmpty() && q.length >= 3) scanInitialsFallback(q, best)
+        // 模糊音（可选）：zh↔z / 前后鼻音 / n↔l 的变体再扫一遍全拼前缀，打折参与排序
+        val mask = fuzzyMask()
+        if (mask != 0) scanFuzzy(q, best, mask)
         // 全句组合（多词连打）：把 q 整段切成 2 个以上的词，产出「整句候选」。只有当「整段输入已被
         // 一个像样的词吃掉」时才放弃简拼段（防「晚上吗」压过「为什么」）；命中词很弱（如 nhm 的女孩们
         // freq=263）时仍然给简拼组合机会（你好吗）。整段本身就是词库里的词且不弱 → 不出整句候选
@@ -45,8 +49,8 @@ class FlatPinyinEngine(
 
         val out = ArrayList<Candidate>(best.size)
         for ((w, c) in best) {
-            val boost = minOf(userCount(w), 20) * 0.3f
-            out.add(Candidate(w, c.score + boost, c.consumed))
+            // 学习加分（次数 + 新鲜度 + 刚上屏前词的搭配），见 Learning
+            out.add(Candidate(w, c.score + userBoost(w), c.consumed))
         }
         out.sortByDescending { it.score }
         return if (out.size > limit) ArrayList(out.subList(0, limit)) else out
@@ -345,6 +349,31 @@ class FlatPinyinEngine(
         }
     }
 
+    // —————— 6) 模糊音（可选开关）：变体全拼前缀 ——————
+
+    /**
+     * 模糊音：把 q 按启用的组生成变体（zh↔z、前后鼻音、n↔l），每个变体按全拼前缀扫一遍。
+     * 变体命中打固定折（同词取最高分，原样命中自然赢）。只扫「全拼前缀」：普通打字、整词与
+     * 末尾补全都覆盖；整句组合里的模糊段暂无。
+     */
+    private fun scanFuzzy(q: String, best: HashMap<String, Cand>, mask: Int) {
+        for (v in FuzzyVariants.variants(q, mask, dict.syllableSet)) {
+            val top = TopByScore(80)
+            var i = dict.lowerBoundFull(v)
+            while (i < dict.size && dict.startsWithFull(i, v)) {
+                val base = ln(1f + dict.freqAt(i))
+                val s = if (dict.pinyinLenAt(i) == v.length) {
+                    base + EXACT_BONUS - FUZZY_EXACT_PENALTY
+                } else {
+                    base - 0.5f - FUZZY_PREFIX_PENALTY
+                }
+                top.offer(i, s)
+                i++
+            }
+            merge(top, best, q.length)
+        }
+    }
+
     /** 定容最小堆：按分数选前 cap 名 */
     private class TopByScore(private val cap: Int) {
         val entries = IntArray(cap)
@@ -446,5 +475,9 @@ class FlatPinyinEngine(
 
         /** 每个位置保留的路径条数 */
         const val PATH_BEAM = 16
+
+        /** 模糊音变体命中的折扣（整段命中 / 只是前缀补全；原样命中不受影响） */
+        const val FUZZY_EXACT_PENALTY = 1.2f
+        const val FUZZY_PREFIX_PENALTY = 2.2f
     }
 }

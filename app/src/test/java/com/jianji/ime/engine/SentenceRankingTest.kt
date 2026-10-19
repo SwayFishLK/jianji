@@ -101,6 +101,46 @@ class SentenceRankingTest {
     }
 
     @Test
+    fun `模糊音接线`() {
+        val all = FuzzyVariants.GROUP_ZH or FuzzyVariants.GROUP_NASAL or FuzzyVariants.GROUP_NL
+        val fuzzy = FlatPinyinEngine(dict, fuzzyMask = { all })
+        val off = FlatPinyinEngine(dict)
+
+        fun top(e: FlatPinyinEngine, q: String, n: Int = 8): List<String> =
+            e.candidates(q, n).map { it.text }
+                .also { println("${if (e === fuzzy) "模糊" else "原样"} $q -> $it") }
+
+        // 关着的时候打错不会出这些词
+        assertTrue("关闭时 zongguo 不该出 中国：${top(off, "zongguo")}", "中国" !in top(off, "zongguo"))
+        assertTrue("关闭时 languo 不该出 难过：${top(off, "languo")}", "难过" !in top(off, "languo"))
+        assertTrue("关闭时 tiangqi 不该出 天气：${top(off, "tiangqi")}", "天气" !in top(off, "tiangqi"))
+
+        // 开了之后：平翘舌 / n-l / 前后鼻音都能兜住
+        assertTrue("zongguo 应出 中国：${top(fuzzy, "zongguo")}", "中国" in top(fuzzy, "zongguo"))
+        assertTrue("languo 应出 难过：${top(fuzzy, "languo")}", "难过" in top(fuzzy, "languo"))
+        assertTrue("tiangqi 应出 天气：${top(fuzzy, "tiangqi")}", "天气" in top(fuzzy, "tiangqi"))
+
+        // 原样正确输入不受影响
+        assertTrue("nihao 首选仍为 你好：${top(fuzzy, "nihao")}", top(fuzzy, "nihao").firstOrNull() == "你好")
+    }
+
+    @Test
+    fun `学习加分接线`() {
+        val plain = FlatPinyinEngine(dict)
+        val boosted = FlatPinyinEngine(dict, userBoost = { w -> if (w == "开发者") 20f else 0f })
+        val p0 = plain.candidates("kaifa", 10).map { it.text }
+        val b0 = boosted.candidates("kaifa", 10).map { it.text }
+        println("kaifa 原样 -> $p0")
+        println("kaifa 加分 -> $b0")
+        assertTrue("加分后首选应为 开发者：$b0", b0.firstOrNull() == "开发者")
+        assertTrue("不加分时首选不该是 开发者：$p0", p0.firstOrNull() != "开发者")
+
+        // 加分只影响当前输入匹配到的词：换输入串后 开发者 不该冒到前面
+        val b1 = boosted.candidates("nihao", 6).map { it.text }
+        assertTrue("nihao 不该被 开发者 干扰：$b1", b1.firstOrNull() == "你好")
+    }
+
+    @Test
     fun `数据查证`() {
         val qs = listOf(
             "你在" to "nizai", "干嘛" to "ganma", "你在干嘛" to "nizaiganma",

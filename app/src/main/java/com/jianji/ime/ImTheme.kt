@@ -46,6 +46,9 @@ object ImTheme {
     /** 警示色（删除 / 清空确认） */
     var warn = 0
 
+    /** 生词标记（B2 / N2 以上的等级角标；暖金，和主色区分开） */
+    var candMark = 0
+
     fun refresh(context: Context) {
         inkPalette(context)
     }
@@ -70,6 +73,7 @@ object ImTheme {
         popupBorder = 0xFF3F4552.toInt()
         popupText = 0xFFE6E8EC.toInt()
         warn = 0xFFE08A8A.toInt()
+        candMark = 0xFFD9A85C.toInt()
     }
 
     fun withA(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)

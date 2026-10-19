@@ -3,9 +3,45 @@
 > 这是给「未来的自己」看的项目状态快照：即使对话记忆被压缩或丢失，
 > 打开这个文件就能接上进度。**每完成一个里程碑或重要步骤后更新它。**
 >
-> 最后更新：2026-10-18 深夜（**0.1.5**：回退 0.1.4 悬浮层 —— 设置页恢复普通 Activity，体验对齐 0.1.3/搜狗；
-> 设置卡片强停问题的根因已定位（桌面写死白名单，见 M5.1g），用户暂缓处理。保留 0.1.2 英文复位修复；
-> 模拟器自检沙箱已建成；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
+> 最后更新：2026-10-19（**v0.2「手感与记忆」**：震动三档 / 候选上划译文 / 记忆与搭配 / 模糊音 /
+> 上滑数字 / 地球键 / 空格滑光标 / 生词角标 —— 代码与 33 项 JVM 单测通过，模拟器全项自检通过；
+> **待真机手感验收**。0.1.5 的 ZUI 强停根因见 M5.1g，用户暂缓；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
+
+### v0.2「手感与记忆」实现（2026-10-19，模拟器全项自检通过，待真机手感验收）
+- **范围（用户拍板）**：批 1 震动三档 + 候选上划译文；批 2 记忆强化 + 排序调优 + 学习数据管理；
+  小件 模糊音 / 字母键上滑数字符号 / 地球键 / 空格滑光标；另加生词高亮。
+- **震动三档**：`AndroidManifest` 加 `VIBRATE`；`Prefs.vibrateLevel`（weak/standard/strong，默认 weak），
+  参数 弱 8ms/46、标准 12ms/120、强 18ms/255（设备无幅度控制时退化时长）；设置页「按键」区新增「振动强度」。
+  **振幅/时长要真机校准**（模拟器无马达）。
+- **候选上划译文**：`CandidateBar` 上划 26dp → `onSwipeUp`；只取第一条义项、去词性、日文去振假名
+  （`GlossDict.inputFormFor` + `inputCache`）：你好→hello、开发→開発する；**无译文 / >4 字候选不动作**、上划不误上屏。
+  英文模式上划 = 中文释义（hello→你好）。网格面板保留纵向滚动，不做上划。
+- **记忆（批 2）**：`Learning.kt` 纯逻辑 + 单测：词表 `词\t次数\t日序`（解析兼容旧两段格式，日序 0 = 未知）、
+  搭配 `前词\t后词\t次数`（key 用 `\u0001` 连接）；加分 = `ln(1+min(count,200))*2.5` + 新鲜度
+  （当日 2.5 / ≤7 天 1.2 / ≤30 天 0.4）+ 搭配 `ln(1+min(pair,20))*1.6`；上限 3000 词 / 1500 搭配，按次数剪枝。
+  Service 内 `wordStats/pairs` + `learnEpoch` 版本键缓存用户加分；设置页「学习记忆」= Top 50 / 删单条 / 清空全部
+  （同进程 SharedPreferences 监听器立刻 `reloadLearn()`；Service 自己写盘用 `selfPrefWrite` 防回读）。
+- **模糊音**：`engine/FuzzyVariants.kt` 做**查询变体扩展**（不改 dict.bin）：按音节切分、逐段展开（封顶 16 个）、
+  三组：平翘舌 zh/z·ch/c·sh/s、前后鼻音 an/ang·en/eng·in/ing、n/l；尾巴规则先丢多打的鼻音
+  （jintiang→jintian、tiangqi→tianqi、jintiann→jintian）；罚分 整段命中 1.2 / 前缀补全 2.2。
+  设置页多选，Prefs 存 `zh,nasal,nl`（空 = 关）；**首版只作用全拼前缀**（简拼/整句不展开）。
+- **小件**：字母/标点键上滑 34dp = 第一个长按备选（复用 `onAlternate`，实测 r↑ = 4）；长按「中/英」=
+  `showInputMethodPicker()`（不新增键）；空格横滑 16dp/步 = `setSelection`（用
+  `getExtractedText(ExtractedTextRequest(), 0)?.selectionStart`，**InputConnection 没有 getSelectionStart**；
+  拿不到位置时方向键兜底），**滑过松手不出空格**，拼音/英文组句中不移动。
+- **生词高亮**：`tools/dictgen/LevelGen.java` 由 CEFR / JLPT 生成 `levels-en.bin`（8845 词 · 110,740 B）与
+  `levels-ja.bin`（7757 词 · 95,122 B）；`LevelDict`（JJL1 二分）门槛 ≥3（B2 / N2）；
+  候选右上角小字暖金 `ImTheme.candMark = 0xFFD9A85C`（栏 0.22h / 网格 0.20h，右缩 5~6dp）。
+  **角标查的是「译文词」的等级**（矛盾→contradiction B2、阐述→elaborate C1、霓→rainbow B2），入门级不标。
+- **回归**：`gradle :app:testDebugUnitTest` 33 项全绿（新增 `LearningTest` 7、`FuzzyVariantsTest` 11、
+  `GlossAndLevelTest` 2；`SentenceRankingTest` 加「模糊音接线 / 学习加分接线」两例）。
+  实测模糊音 zongguo→中国 / languo→难过 / tiangqi→天气 均首位，原样输入不受影响；kaifa→开发者 置顶。
+- **模拟器自检（2026-10-19，全过）**：候选上划 你好→hello ✓；英文模式 hello→你好 ✓；
+  空格左滑 2 格后 ⌫ 得 helo ✓（滑过不出空格）；r 上滑打 4 ✓；长按中/英 弹「选择输入法」✓；
+  设置页 振动强度 / 模糊音 / 学习数据 三行 ✓；学习数据删单条 + 空状态 ✓；模糊音全选后 zongguo→中国 ✓；
+  候选栏与网格 B2/C2 角标位置正常 ✓（网格纵向滚动正常、未误上屏）。
+- **待办**：① 真机手感验收（震动强弱、上划阈值 26dp、空格滑步长 16dp、角标观感）；
+  ② 排序「对症调优」需用户给 2~3 个失败实例（或同意临时调试版记录）；③ 发版时 bump 0.2.0 / versionCode 7。
 
 ### 项目改名：`shurufa` → `jianji`（2026-10-18 下午）
 - 资源管理器直接改名一直报「被占用」：占用者 = opencode 进程 ×2 + `adb.exe`（adb server 的 cwd 卡在文件夹里）。
@@ -833,4 +869,12 @@ java tools\dictgen\GlossGen.java reference\qingjian-repo\assets\glossary\glossar
   **设置系页面（设置/许可）= 卡片风格**（M5.1：顶部「← 标题」栏 + 分区 accent 小标题 + 每行 22dp 圆角卡片 +
   圆形图标泡；`ImUi.kt` 共用样式 + `res/drawable/ic_*.xml` 矢量图标）；**应用图标 = B 墨底蓝简**
   （M5.1：`tools/icon/gen_icon.py`，墨底 #17191E + 蓝简 #5B8DEF，自适应前景字形 0.43 画布）
+- **v0.2 参数（真机待校准）**：震动 = `Prefs.VIBRATE_*`（弱 8ms/46、标准 12ms/120、强 18ms/255，
+  `JianjiImeService.rebuildVibration()`）；候选上划阈值 26dp（`CandidateBar.swipeUpSlop`）；
+  空格横滑 16dp/步 + 字母键上滑 34dp（`KeyboardView`）；记忆权重/上限在 `Learning.kt`；
+  模糊音展开在 `FuzzyVariants.kt`、罚分 `FlatPinyinEngine.FUZZY_EXACT_PENALTY/FUZZY_PREFIX_PENALTY`；
+  角标门槛 `LevelDict.markFor`（≥3 = B2/N2，颜色 `ImTheme.candMark`）。**改完先跑 `gradle :app:testDebugUnitTest` 再上机**
+- **生词等级表重建**（工作目录 `tools/dictgen`，源 = 青简 `levels-*.tsv`）：
+  `java LevelGen.java ..\..\reference\qingjian-repo\assets\levels\levels-en.tsv ..\..\app\src\main\assets\levels-en.bin`
+  （`levels-ja.tsv` 同理）；查词 `java LevelGen.java --lookup ..\..\app\src\main\assets\levels-en.bin <词>`
 - `.dev-env/` 和 `reference/` 都在 .gitignore；**用户 2026-10-17 明确：`.dev-env` 暂留，必须等用户明说才整体删除**

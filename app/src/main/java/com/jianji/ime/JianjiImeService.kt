@@ -6,8 +6,12 @@ import android.content.SharedPreferences
 import android.graphics.RectF
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -15,14 +19,18 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
+import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.jianji.ime.engine.Candidate
 import com.jianji.ime.engine.EmojiDict
 import com.jianji.ime.engine.EnglishDict
 import com.jianji.ime.engine.FlatPinyinEngine
+import com.jianji.ime.engine.FuzzyVariants
 import com.jianji.ime.engine.GlossDict
 import com.jianji.ime.engine.JianDict
+import com.jianji.ime.engine.LevelDict
 import com.jianji.ime.engine.PinyinEngine
 import com.jianji.ime.keyboard.CandidateBar
 import com.jianji.ime.keyboard.CandidateGridPanel
@@ -73,7 +81,21 @@ class JianjiImeService : InputMethodService() {
     private val pinyin = StringBuilder()
     private var candidates: List<Candidate> = emptyList()
     private var englishMode = false
-    private val userWords = HashMap<String, Int>()
+
+    // —————— v0.2：记忆（词频 + 新鲜度 + 搭配，见 Learning） ——————
+
+    private val wordStats = HashMap<String, Learning.WordStat>()
+    private val pairs = HashMap<String, Int>()
+
+    /** 刚上屏的词（搭配上下文；换输入框/会话时清空） */
+    private var lastCommitted: String? = null
+
+    /** 学习数据版本号：一有变化就失效加分缓存 */
+    private var learnEpoch = 0
+    private var boostCacheEpoch = -1
+    private var boostCachePrev: String? = null
+    private var boostDay = 0L
+    private val boostCache = HashMap<String, Float>(256)
 
     // —————— M3：学习层（候选译文，一次一种语言） ——————
 
@@ -85,6 +107,13 @@ class JianjiImeService : InputMethodService() {
     private var glossLang: String? = null
     private var glossLoading: String? = null
     private var glossFailedLang: String? = null
+
+    /** 生词等级表（v0.2）：英语 CEFR / 日语 JLPT，候选右上角标 B2 / N2 以上（「生词高亮」） */
+    @Volatile
+    private var levelsEn: LevelDict? = null
+
+    @Volatile
+    private var levelsJa: LevelDict? = null
 
     // —————— M3.5：英文模式（原样输入 + 联想词，词上补中文释义） ——————
 
@@ -126,13 +155,25 @@ class JianjiImeService : InputMethodService() {
     private var soundOn = true
     private var vibrateOn = true
 
+    /** 振动强度档位（弱 / 标准 / 强；v0.2 起默认弱，真机校准） */
+    private var vibrateLevel = Prefs.VIBRATE_WEAK
+    private var vibrator: Vibrator? = null
+    private var vibeWeak: VibrationEffect? = null
+    private var vibeStandard: VibrationEffect? = null
+    private var vibeStrong: VibrationEffect? = null
+
     private val prefListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             refreshFeedbackFlags()
             when (key) {
                 Prefs.KEY_LEARN_LANG -> onLearnLangChanged()
+                Prefs.KEY_VIBRATE_LEVEL -> rebuildVibration()
+                Prefs.KEY_USER_WORDS, Prefs.KEY_PAIRS -> if (!selfPrefWrite) reloadLearn()
             }
         }
+
+    /** learn() 自己写盘时置位：避免监听器把自己的写入又读回来 */
+    private var selfPrefWrite = false
 
     /** 键盘底板（根背景色；墨夜单主题） */
     private var baseLayout: LinearLayout? = null
@@ -201,12 +242,18 @@ class JianjiImeService : InputMethodService() {
         ImTheme.refresh(this)
         Prefs.get(this).registerOnSharedPreferenceChangeListener(prefListener)
         refreshFeedbackFlags()
-        userWords.putAll(Prefs.loadUserWords(this))
+        rebuildVibration()
+        wordStats.putAll(Prefs.loadWordStats(this))
+        pairs.putAll(Prefs.loadPairs(this))
         // 词库异步预载（~4.5MB），避免首次按键时卡顿
         Thread({
             engine = try {
                 val dict = assets.open("dict.bin").use { JianDict.load(it) }
-                FlatPinyinEngine(dict) { w -> userWords[w] ?: 0 }
+                FlatPinyinEngine(
+                    dict,
+                    userBoost = { w -> userBoost(w) },
+                    fuzzyMask = { fuzzyMask() },
+                )
             } catch (t: Throwable) {
                 null
             }
@@ -230,13 +277,19 @@ class JianjiImeService : InputMethodService() {
             onKey = { handleKey(it) }
             onAlternate = { text -> onTextKey(text) }
             onClearInput = { clearInputField() }
+            onSpaceMove = { step -> moveCursorBy(step) }
+            onMoveFeedback = { feedback(hapticOnly = true) }
+            onSwitchIme = { showImePicker() }
             optionsHost = optionsHostAdapter
         }
         optionsZone = FrameLayout(this)
         rootView = FrameLayout(this)
         val d = resources.displayMetrics.density
         // 候选栏（右侧留给功能图标行：剪贴板 / 表情 / 设置 / 收起；输入中工具图标自动隐藏）
-        candidateBar = CandidateBar(this).apply { onSelect = { onCandidateTap(it) } }
+        candidateBar = CandidateBar(this).apply {
+            onSelect = { onCandidateTap(it) }
+            onSwipeUp = { onCandidateSwipeUp(it) }
+        }
         val clipW = (40 * d).toInt()
         val emojiW = (38 * d).toInt()
         val gearW = (40 * d).toInt()
@@ -367,6 +420,7 @@ class JianjiImeService : InputMethodService() {
         englishBuf.setLength(0)
         candidates = emptyList()
         englishSuggestions = emptyList()
+        lastCommitted = null
         if (::keyboardView.isInitialized) {
             keyboardView.shiftState = shift
             keyboardView.langEnglish = englishMode
@@ -514,6 +568,34 @@ class JianjiImeService : InputMethodService() {
         candidates.getOrNull(index)?.let { commitCandidate(it) }
     }
 
+    /**
+     * 候选上划：把候选对应的译文直接上屏（只取第一条义项，去词性 / 去振假名注音）。
+     * 中文 = 学习语言译文（你好 → hello、开发 → 開発する）；英文 = 中文释义。
+     * 无译文的候选 / 长句候选不动作（与译文注记同一门槛）。
+     */
+    private fun onCandidateSwipeUp(index: Int) {
+        val ic = currentInputConnection ?: return
+        if (englishMode && englishBuf.isNotEmpty()) {
+            val word = if (index == 0) {
+                englishBuf.toString()
+            } else {
+                englishSuggestions.getOrNull(index - 1) ?: return
+            }
+            val t = zhGloss?.inputFormFor(word)
+                ?: zhGloss?.inputFormFor(word.lowercase(Locale.ROOT))
+                ?: return
+            if (t.isEmpty()) return
+            ic.commitText(t, 1)
+            clearComposing()
+            return
+        }
+        val c = candidates.getOrNull(index) ?: return
+        if (c.text.length > 4) return
+        val t = gloss?.inputFormFor(c.text) ?: return
+        if (t.isEmpty()) return
+        commitCandidateText(c, t)
+    }
+
     /** 上屏首选词（没有候选则原样上屏拼音） */
     private fun commitPending() {
         val top = candidates.firstOrNull()
@@ -525,17 +607,20 @@ class JianjiImeService : InputMethodService() {
      * （nihaom 点「你好」→ 输入框里剩 m 继续选；对齐搜狗 / 青简 commit 的语义）。
      * 否则整段上屏，清空组句。
      */
-    private fun commitCandidate(c: Candidate) {
+    private fun commitCandidate(c: Candidate) = commitCandidateText(c, c.text)
+
+    /** 上屏候选文本（部分上屏语义同上；上划译文走这里，学习仍记原词） */
+    private fun commitCandidateText(c: Candidate, text: String) {
         val ic = currentInputConnection ?: return
         learn(c.text)
         if (c.consumed in 1 until pinyin.length) {
             val rest = pinyin.substring(c.consumed)
-            ic.commitText(c.text, 1)
+            ic.commitText(text, 1)
             pinyin.setLength(0)
             pinyin.append(rest)
             updateComposing()
         } else {
-            ic.commitText(c.text, 1)
+            ic.commitText(text, 1)
             clearComposing()
         }
     }
@@ -567,11 +652,70 @@ class JianjiImeService : InputMethodService() {
         clearComposing()
     }
 
-    /** 记入用户词频（学习） */
+    /**
+     * 记入学习数据：次数 +1、刷新最近使用日，并记一条「前词 → 本词」搭配。
+     * 只有真上屏的词会走到这里（点选 / 上划译文 / 空格首选）。
+     */
     private fun learn(word: String) {
-        val c = ((userWords[word] ?: 0) + 1).coerceAtMost(9999)
-        userWords[word] = c
-        if (userWords.size <= 3000) Prefs.saveUserWords(this, userWords)
+        val st = wordStats[word]
+        wordStats[word] = Learning.WordStat((st?.count ?: 0) + 1, Learning.today())
+        val prev = lastCommitted
+        if (prev != null && prev != word) {
+            val k = Learning.pairKey(prev, word)
+            pairs[k] = ((pairs[k] ?: 0) + 1).coerceAtMost(999)
+        }
+        lastCommitted = word
+        learnEpoch++
+        Learning.pruneWords(wordStats)
+        Learning.prunePairs(pairs)
+        selfPrefWrite = true
+        Prefs.saveWordStats(this, wordStats)
+        Prefs.savePairs(this, pairs)
+        selfPrefWrite = false
+    }
+
+    /** 设置页改了学习数据（删词 / 清空）：立刻同步到内存，不用等输入法重启 */
+    private fun reloadLearn() {
+        wordStats.clear()
+        wordStats.putAll(Prefs.loadWordStats(this))
+        pairs.clear()
+        pairs.putAll(Prefs.loadPairs(this))
+        learnEpoch++
+    }
+
+    /**
+     * 候选学习加分（次数 + 新鲜度 + 刚上屏前词的搭配）。
+     * 按「学习版本 + 前词」缓存：一次组句里每候选只算一次，不重复拼 key。
+     */
+    private fun userBoost(w: String): Float {
+        val cur = lastCommitted
+        if (boostCacheEpoch != learnEpoch || boostCachePrev != cur) {
+            boostCache.clear()
+            boostCacheEpoch = learnEpoch
+            boostCachePrev = cur
+            boostDay = Learning.today()
+        }
+        boostCache[w]?.let { return it }
+        var b = Learning.boost(wordStats[w], boostDay)
+        if (cur != null) b += Learning.pairBoost(pairs[Learning.pairKey(cur, w)])
+        boostCache[w] = b
+        return b
+    }
+
+    /** 模糊音开关（设置页写 Prefs）→ 引擎掩码；读取即生效 */
+    private fun fuzzyMask(): Int {
+        val g = Prefs.fuzzyGroups(this)
+        if (g.isEmpty()) return 0
+        var m = 0
+        for (t in g.split(',')) {
+            m = when (t) {
+                "zh" -> m or FuzzyVariants.GROUP_ZH
+                "nasal" -> m or FuzzyVariants.GROUP_NASAL
+                "nl" -> m or FuzzyVariants.GROUP_NL
+                else -> m
+            }
+        }
+        return m
     }
 
     /** 原样上屏拼音字母 */
@@ -600,8 +744,14 @@ class JianjiImeService : InputMethodService() {
                 ?.filterNot { it.equals(text, true) } ?: emptyList()
             val zg = zhGloss
             val list = ArrayList<CandidateBar.Item>(englishSuggestions.size + 1)
-            list.add(CandidateBar.Item(text, zg?.annotationFor(text) ?: zg?.annotationFor(text.lowercase(Locale.ROOT))))
-            for (w in englishSuggestions) list.add(CandidateBar.Item(w, zg?.annotationFor(w)))
+            list.add(
+                CandidateBar.Item(
+                    text,
+                    zg?.annotationFor(text) ?: zg?.annotationFor(text.lowercase(Locale.ROOT)),
+                    englishMark(text),
+                ),
+            )
+            for (w in englishSuggestions) list.add(CandidateBar.Item(w, zg?.annotationFor(w), englishMark(w)))
             candidates = emptyList()
             candidateItems = list
         } else {
@@ -610,13 +760,29 @@ class JianjiImeService : InputMethodService() {
             val g = gloss
             // 译文只注短候选（≤4 字，词条体量）：整句/长短语没有现成译词，不查也不占位（青简同款）
             candidateItems = candidates.map {
-                val ann = if (it.text.length <= 4) g?.annotationFor(it.text) else null
-                CandidateBar.Item(it.text, ann)
+                val short = it.text.length <= 4
+                val ann = if (short) g?.annotationFor(it.text) else null
+                val mark = if (short) chineseMark(it.text, g) else null
+                CandidateBar.Item(it.text, ann, mark)
             }
         }
         candidateBar.setItems(candidateItems)
         if (overlay == Overlay.GRID) gridPanel.setItems(candidateItems)
         updateRightButton()
+    }
+
+    /** 英文候选的生词角标（CEFR；等级表按小写入库） */
+    private fun englishMark(word: String): String? =
+        levelsEn?.markFor(word.lowercase(Locale.ROOT))
+
+    /** 中文候选的生词角标：看学习语言译文的「可输入形态」（英语查 CEFR、日语查 JLPT） */
+    private fun chineseMark(word: String, g: GlossDict?): String? {
+        val form = g?.inputFormFor(word) ?: return null
+        return when (glossLang) {
+            "en" -> levelsEn?.markFor(form.lowercase(Locale.ROOT))
+            "ja" -> levelsJa?.markFor(form) ?: levelsJa?.markFor(form.removeSuffix("する"))
+            else -> null
+        }
     }
 
     /**
@@ -638,12 +804,24 @@ class JianjiImeService : InputMethodService() {
             } catch (t: Throwable) {
                 null
             }
+            // 生词等级表（~100KB）顺手载：CEFR / JLPT，候选右上角角标用
+            val lv = try {
+                assets.open("levels-$lang.bin").use { LevelDict.load(it) }
+            } catch (t: Throwable) {
+                null
+            }
             mainHandler.post {
                 if (glossLoading == lang) glossLoading = null
                 if (Prefs.learnLang(this) != lang) return@post
                 if (g != null) {
                     gloss = g
                     glossLang = lang
+                    if (lv != null) {
+                        when (lang) {
+                            "en" -> levelsEn = lv
+                            "ja" -> levelsJa = lv
+                        }
+                    }
                 } else {
                     glossFailedLang = lang
                 }
@@ -670,6 +848,12 @@ class JianjiImeService : InputMethodService() {
             } catch (t: Throwable) {
                 null
             }
+            // 英文候选的生词角标（CEFR）也顺手载
+            val lv = try {
+                assets.open("levels-en.bin").use { LevelDict.load(it) }
+            } catch (t: Throwable) {
+                null
+            }
             mainHandler.post {
                 englishLoading = false
                 if (d == null || g == null) {
@@ -678,6 +862,7 @@ class JianjiImeService : InputMethodService() {
                 }
                 englishDict = d
                 zhGloss = g
+                if (lv != null) levelsEn = lv
                 if (englishMode && englishBuf.isNotEmpty()) updateComposing()
             }
         }, "jianji-english-load").start()
@@ -884,6 +1069,38 @@ class JianjiImeService : InputMethodService() {
         keyboardView.shiftState = shift
     }
 
+    // —————— 空格滑光标 / 输入法选择（地球） ——————
+
+    /**
+     * 空格左右滑：把光标挪 step 格（逐格触发）。
+     * 组句中的不挪（免得内联拼音和光标拆开）；拿不到光标位置（个别编辑器）退化为方向键。
+     */
+    private fun moveCursorBy(step: Int) {
+        val ic = currentInputConnection ?: return
+        if (pinyin.isNotEmpty() || englishBuf.isNotEmpty()) return
+        val sel = try {
+            ic.getExtractedText(ExtractedTextRequest(), 0)?.selectionStart ?: -1
+        } catch (_: Exception) {
+            -1
+        }
+        if (sel < 0) {
+            val key = if (step > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+            return
+        }
+        ic.setSelection(sel + step, sel + step)
+    }
+
+    /** 中/英键长按（地球）：弹输入法选择器 */
+    private fun showImePicker() {
+        try {
+            getSystemService(InputMethodManager::class.java)?.showInputMethodPicker()
+        } catch (_: Exception) {
+            // 个别 ROM 不给输入法弹选择器；忽略
+        }
+    }
+
     // —————— 音效与振动 ——————
 
     private fun refreshFeedbackFlags() {
@@ -891,6 +1108,7 @@ class JianjiImeService : InputMethodService() {
         @Suppress("DEPRECATION")
         val haptic = systemSwitchOn(Settings.System.HAPTIC_FEEDBACK_ENABLED)
         vibrateOn = Prefs.isVibrateOn(this) && haptic
+        vibrateLevel = Prefs.vibrateLevel(this)
     }
 
     private fun systemSwitchOn(key: String): Boolean = try {
@@ -899,11 +1117,50 @@ class JianjiImeService : InputMethodService() {
         true
     }
 
-    private fun feedback() {
-        if (vibrateOn) {
-            keyboardView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+    /**
+     * 振动强度（弱 / 标准 / 强）：系统触感常量（KEYBOARD_TAP）强度写死，只有振动器 API 能调。
+     * 幅度可控时按幅度分档；不可控（少数 ROM）退化为不同时长。数值待真机校准。
+     */
+    private fun rebuildVibration() {
+        val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Vibrator::class.java)
         }
-        if (soundOn) {
+        vibrator = v
+        val amp = v?.hasAmplitudeControl() == true
+        fun shot(ms: Long, level: Int): VibrationEffect? = try {
+            VibrationEffect.createOneShot(ms, if (amp) level else VibrationEffect.DEFAULT_AMPLITUDE)
+        } catch (_: Throwable) {
+            null
+        }
+        // 弱 = 短促轻点（默认）；标准 = 常规键盘手感；强 = 明显更重
+        vibeWeak = shot(8, 46)
+        vibeStandard = shot(12, 120)
+        vibeStrong = shot(18, 255)
+    }
+
+    /** 按键反馈；hapticOnly = 只振动不出声（空格滑光标逐格反馈用） */
+    private fun feedback(hapticOnly: Boolean = false) {
+        if (vibrateOn) {
+            val eff = when (vibrateLevel) {
+                Prefs.VIBRATE_STANDARD -> vibeStandard
+                Prefs.VIBRATE_STRONG -> vibeStrong
+                else -> vibeWeak
+            }
+            val v = vibrator
+            if (eff != null && v != null && v.hasVibrator()) {
+                try {
+                    v.vibrate(eff)
+                } catch (_: Exception) {
+                    // 个别 ROM 会抛；忽略
+                }
+            } else if (::keyboardView.isInitialized) {
+                keyboardView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+        }
+        if (!hapticOnly && soundOn) {
             audioManager.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.5f)
         }
     }

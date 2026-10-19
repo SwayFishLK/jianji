@@ -38,6 +38,8 @@ interface OptionsHost {
  * - 多指独立跟踪 + 键缝命中容差；快速连打不丢键
  * - 字母键上方小字显示长按备选；长按弹备选条（大写/备选/小写），松手上屏
  * - ⌫ 上划清空输入框、长按连删；⇧ 单击一次性大写 / 双击锁定
+ * - 字母 / 标点键上滑 = 键上的第一个备选（打数字、符号）；空格左右滑 = 挪光标；
+ *   中/英长按 = 输入法选择器（地球）
  * - 数字页、符号页（分类标签栏）由本视图内部处理页切换
  */
 class KeyboardView @JvmOverloads constructor(
@@ -87,6 +89,15 @@ class KeyboardView @JvmOverloads constructor(
 
     /** ⌫ 上划 → 请求清空输入框 */
     var onClearInput: (() -> Unit)? = null
+
+    /** 空格左右滑 → 挪光标（-1 左 / +1 右，按步长连续触发） */
+    var onSpaceMove: ((Int) -> Unit)? = null
+
+    /** 挪光标步进反馈（只振动，不出声） */
+    var onMoveFeedback: (() -> Unit)? = null
+
+    /** 中/英键长按 → 切换输入法（地球） */
+    var onSwitchIme: (() -> Unit)? = null
 
     /** 备选条宿主（由 Service 提供） */
     var optionsHost: OptionsHost? = null
@@ -142,6 +153,12 @@ class KeyboardView @JvmOverloads constructor(
     private val clearSwipeUp = dp(40f)
     private val optionsCancelBelow = dp(52f)
 
+    /** 字母 / 文本键上划触发备选的位移（上滑打数字、符号） */
+    private val altSwipeUp = dp(34f)
+
+    /** 空格滑光标：每挪一格的横向位移 */
+    private val spaceStepX = dp(16f)
+
     /** 标签栏顶部 y（无标签时为负） */
     private var tabTop = -1f
 
@@ -179,8 +196,13 @@ class KeyboardView @JvmOverloads constructor(
     private class PointerState(
         val down: PlacedKey,
         var current: PlacedKey?,
+        val downX: Float,
         val downY: Float,
         var consumed: Boolean = false,
+        /** 空格滑光标：下一个触发步进的锚点 x */
+        var slideAnchorX: Float = downX,
+        /** 空格滑过光标（松手不再出空格） */
+        var slid: Boolean = false,
     )
 
     private val pointers = HashMap<Int, PointerState>()
@@ -209,6 +231,18 @@ class KeyboardView @JvmOverloads constructor(
     private var optionsPointerId = -1
     private var optionsActive = false
     private val optionsRunnable = Runnable { showOptions() }
+
+    /** 中/英键长按（地球）：到时间就切输入法选择器，松手不再触发中英切换 */
+    private var imePointerId = -1
+    private val imeSwitchRunnable = Runnable {
+        val st = pointers[imePointerId] ?: return@Runnable
+        val cur = st.current ?: return@Runnable
+        if (cur.def.action != KeyAction.LANG_TOGGLE) return@Runnable
+        st.consumed = true
+        refreshPressed()
+        onKeyFeedback?.invoke()
+        onSwitchIme?.invoke()
+    }
 
     // —————— 测量与布局 ——————
 
@@ -567,7 +601,7 @@ class KeyboardView @JvmOverloads constructor(
 
                 val pk = keyAt(x, y)
                 if (pk != null) {
-                    pointers[id] = PointerState(pk, pk, y)
+                    pointers[id] = PointerState(pk, pk, x, y)
                     onKeyFeedback?.invoke()
                     when {
                         pk.def.action == KeyAction.BACKSPACE -> {
@@ -576,6 +610,16 @@ class KeyboardView @JvmOverloads constructor(
                             handler.removeCallbacks(repeatRunnable)
                             handler.postDelayed(
                                 repeatStart,
+                                ViewConfiguration.getLongPressTimeout().toLong(),
+                            )
+                        }
+
+                        pk.def.action == KeyAction.LANG_TOGGLE -> {
+                            // 长按中/英：切换到别的输入法（地球键的语义）
+                            imePointerId = id
+                            handler.removeCallbacks(imeSwitchRunnable)
+                            handler.postDelayed(
+                                imeSwitchRunnable,
                                 ViewConfiguration.getLongPressTimeout().toLong(),
                             )
                         }
@@ -623,12 +667,45 @@ class KeyboardView @JvmOverloads constructor(
                     }
                     if (st.consumed) continue
 
+                    // 空格左右滑 → 挪光标（每步长一格；滑过之后松手不再出空格）
+                    if (st.down.def.action == KeyAction.SPACE) {
+                        while (x - st.slideAnchorX > spaceStepX) {
+                            st.slideAnchorX += spaceStepX
+                            st.slid = true
+                            onSpaceMove?.invoke(1)
+                            onMoveFeedback?.invoke()
+                        }
+                        while (st.slideAnchorX - x > spaceStepX) {
+                            st.slideAnchorX -= spaceStepX
+                            st.slid = true
+                            onSpaceMove?.invoke(-1)
+                            onMoveFeedback?.invoke()
+                        }
+                        continue
+                    }
+
+                    // 字母 / 文本键上划 → 打键上的第一个长按备选（上滑打数字、符号；对齐搜狗）
+                    if (!optionsActive && st.downY - y > altSwipeUp) {
+                        val alt = KeyboardLayouts.alternatesFor(st.down.def).firstOrNull()
+                        if (alt != null) {
+                            st.consumed = true
+                            if (id == optionsPointerId) handler.removeCallbacks(optionsRunnable)
+                            onKeyFeedback?.invoke()
+                            onAlternate?.invoke(alt)
+                            refreshPressed()
+                            continue
+                        }
+                    }
+
                     val pk = keyAt(x, y)
                     if (pk !== st.current) {
                         st.current = pk
                         if (pk != null) onKeyFeedback?.invoke()
                         if (pk !== st.down && !optionsActive && id == optionsPointerId) {
                             handler.removeCallbacks(optionsRunnable)
+                        }
+                        if (pk !== st.down && id == imePointerId) {
+                            handler.removeCallbacks(imeSwitchRunnable)
                         }
                         refreshPressed()
                     }
@@ -656,6 +733,7 @@ class KeyboardView @JvmOverloads constructor(
                 pressedKeys.clear()
                 dismissOptions()
                 cancelRepeat(-1)
+                imePointerId = -1
                 handler.removeCallbacksAndMessages(null)
                 invalidate()
             }
@@ -664,6 +742,10 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun handlePointerUp(id: Int, st: PointerState) {
+        if (id == imePointerId) {
+            handler.removeCallbacks(imeSwitchRunnable)
+            imePointerId = -1
+        }
         if (id == optionsPointerId && !optionsActive) handler.removeCallbacks(optionsRunnable)
 
         // 备选条激活中松手 → 上屏选中的备选
@@ -675,7 +757,7 @@ class KeyboardView @JvmOverloads constructor(
         }
 
         cancelRepeat(id)
-        if (st.consumed) return
+        if (st.consumed || st.slid) return
 
         val cur = st.current ?: return
         when (cur.def.action) {
