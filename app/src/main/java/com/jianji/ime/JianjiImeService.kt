@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.RectF
 import android.inputmethodservice.InputMethodService
-import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -62,7 +61,6 @@ class JianjiImeService : InputMethodService() {
     private enum class Overlay { NONE, GRID, CLIP, EMOJI }
 
     private lateinit var keyboardView: KeyboardView
-    private lateinit var audioManager: AudioManager
 
     private var shift = ShiftState.OFF
     private var page = Page.LETTERS
@@ -151,11 +149,10 @@ class JianjiImeService : InputMethodService() {
     private val clipListener =
         ClipboardManager.OnPrimaryClipChangedListener { onPrimaryClipChanged() }
 
-    /** 按键反馈开关 = 用户偏好 && 系统设置（随偏好变化实时刷新） */
-    private var soundOn = true
+    /** 按键振动开关 = 用户偏好 && 系统触感设置（随偏好变化实时刷新） */
     private var vibrateOn = true
 
-    /** 振动强度档位（弱 / 标准 / 强；v0.2 起默认弱，真机校准） */
+    /** 振动强度档位（弱 / 标准 / 强；默认弱，按时长分档，真机校准） */
     private var vibrateLevel = Prefs.VIBRATE_WEAK
     private var vibrator: Vibrator? = null
     private var vibeWeak: VibrationEffect? = null
@@ -238,7 +235,6 @@ class JianjiImeService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
-        audioManager = getSystemService(AudioManager::class.java)
         ImTheme.refresh(this)
         Prefs.get(this).registerOnSharedPreferenceChangeListener(prefListener)
         refreshFeedbackFlags()
@@ -278,7 +274,7 @@ class JianjiImeService : InputMethodService() {
             onAlternate = { text -> onTextKey(text) }
             onClearInput = { clearInputField() }
             onSpaceMove = { step -> moveCursorBy(step) }
-            onMoveFeedback = { feedback(hapticOnly = true) }
+            onMoveFeedback = { feedback() }
             onSwitchIme = { showImePicker() }
             optionsHost = optionsHostAdapter
         }
@@ -1104,7 +1100,6 @@ class JianjiImeService : InputMethodService() {
     // —————— 音效与振动 ——————
 
     private fun refreshFeedbackFlags() {
-        soundOn = Prefs.isSoundOn(this) && systemSwitchOn(Settings.System.SOUND_EFFECTS_ENABLED)
         @Suppress("DEPRECATION")
         val haptic = systemSwitchOn(Settings.System.HAPTIC_FEEDBACK_ENABLED)
         vibrateOn = Prefs.isVibrateOn(this) && haptic
@@ -1119,7 +1114,10 @@ class JianjiImeService : InputMethodService() {
 
     /**
      * 振动强度（弱 / 标准 / 强）：系统触感常量（KEYBOARD_TAP）强度写死，只有振动器 API 能调。
-     * 幅度可控时按幅度分档；不可控（少数 ROM）退化为不同时长。数值待真机校准。
+     *
+     * 注意本机（Lenovo L71091）振动器**不支持幅度控制**（dumpsys：mCapabilities=[ON_CALLBACK]，
+     * mMaxAmplitudes count=0）——幅度参数会被系统忽略，三档只能靠**时长**拉开差距：
+     * 5ms（微微一点）/ 15ms（常规）/ 30ms（明显更重）。幅度值留给支持幅度控制的设备。
      */
     private fun rebuildVibration() {
         val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -1135,33 +1133,28 @@ class JianjiImeService : InputMethodService() {
         } catch (_: Throwable) {
             null
         }
-        // 弱 = 短促轻点（默认）；标准 = 常规键盘手感；强 = 明显更重
-        vibeWeak = shot(8, 46)
-        vibeStandard = shot(12, 120)
-        vibeStrong = shot(18, 255)
+        vibeWeak = shot(5, 35)
+        vibeStandard = shot(15, 110)
+        vibeStrong = shot(30, 255)
     }
 
-    /** 按键反馈；hapticOnly = 只振动不出声（空格滑光标逐格反馈用） */
-    private fun feedback(hapticOnly: Boolean = false) {
-        if (vibrateOn) {
-            val eff = when (vibrateLevel) {
-                Prefs.VIBRATE_STANDARD -> vibeStandard
-                Prefs.VIBRATE_STRONG -> vibeStrong
-                else -> vibeWeak
-            }
-            val v = vibrator
-            if (eff != null && v != null && v.hasVibrator()) {
-                try {
-                    v.vibrate(eff)
-                } catch (_: Exception) {
-                    // 个别 ROM 会抛；忽略
-                }
-            } else if (::keyboardView.isInitialized) {
-                keyboardView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            }
+    /** 按键振动（跟随系统「触感反馈」开关） */
+    private fun feedback() {
+        if (!vibrateOn) return
+        val eff = when (vibrateLevel) {
+            Prefs.VIBRATE_STANDARD -> vibeStandard
+            Prefs.VIBRATE_STRONG -> vibeStrong
+            else -> vibeWeak
         }
-        if (!hapticOnly && soundOn) {
-            audioManager.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.5f)
+        val v = vibrator
+        if (eff != null && v != null && v.hasVibrator()) {
+            try {
+                v.vibrate(eff)
+            } catch (_: Exception) {
+                // 个别 ROM 会抛；忽略
+            }
+        } else if (::keyboardView.isInitialized) {
+            keyboardView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         }
     }
 

@@ -25,7 +25,6 @@ class SettingsActivity : Activity() {
     private lateinit var langValueText: TextView
     private lateinit var vibrateLevelText: TextView
     private lateinit var fuzzyValueText: TextView
-    private lateinit var learnDataText: TextView
 
     /** 正在跳转「开源许可」页（同任务内的正常导航，不算离开设置页） */
     private var navigatingToLicense = false
@@ -43,7 +42,6 @@ class SettingsActivity : Activity() {
         updateFuzzyValue()
         refreshPhrases()
         refreshClipCount()
-        updateLearnDataValue()
     }
 
     /**
@@ -83,18 +81,6 @@ class SettingsActivity : Activity() {
 
         // —— 按键 ——
         box.addView(ImUi.sectionLabel(this, "按键"), ImUi.lp(this, 26f, 14f))
-        box.addView(
-            ImUi.cardRow(
-                this,
-                iconRes = R.drawable.ic_sound,
-                title = "按键声音",
-                right = Switch(this).apply {
-                    isChecked = Prefs.isSoundOn(this@SettingsActivity)
-                    setOnCheckedChangeListener { _, on -> Prefs.setSoundOn(this@SettingsActivity, on) }
-                },
-            ),
-            ImUi.lp(this, 10f),
-        )
         box.addView(
             ImUi.cardRow(
                 this,
@@ -197,23 +183,7 @@ class SettingsActivity : Activity() {
             ImUi.lp(this, 10f, 14f, 14f),
         )
 
-        // —— 学习记忆（v0.2）——
-        box.addView(ImUi.sectionLabel(this, "学习记忆"), ImUi.lp(this, 26f, 14f))
-        learnDataText = ImUi.subTextView(this)
-        box.addView(
-            ImUi.cardRow(
-                this,
-                iconRes = R.drawable.ic_memory,
-                title = "学习数据",
-                subtitleView = learnDataText,
-                chevron = true,
-            ) { showLearnDataDialog() },
-            ImUi.lp(this, 10f),
-        )
-        box.addView(
-            ImUi.note(this, "打过的词会记得：常用的往前站、刚打过的优先（点击可看和删）。数据只存本机。"),
-            ImUi.lp(this, 10f, 14f, 14f),
-        )
+        // —— 学习记忆（不再对用户展示；词频与搭配在后台默默学，数据只存本机）——
 
         // —— 关于 ——
         box.addView(ImUi.sectionLabel(this, "关于"), ImUi.lp(this, 26f, 14f))
@@ -346,65 +316,6 @@ class SettingsActivity : Activity() {
             }
         }
         fuzzyValueText.text = if (names.isEmpty()) "关闭" else names.joinToString("·")
-    }
-
-    // —————— 学习数据（v0.2） ——————
-
-    private fun updateLearnDataValue() {
-        if (!::learnDataText.isInitialized) return
-        val n = Prefs.loadWordStats(this).size
-        val m = Prefs.loadPairs(this).size
-        learnDataText.text = if (n == 0 && m == 0) "还没有记录" else "已学 $n 词 · 搭配 $m 组"
-    }
-
-    /** 学习数据：看常用词 Top / 删单条 / 清空全部（清空会同步通知输入法，立刻生效） */
-    private fun showLearnDataDialog() {
-        val words = Prefs.loadWordStats(this)
-        if (words.isEmpty()) {
-            Toast.makeText(this, "还没有学习记录", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("学习数据")
-            .setView(ScrollView(this).apply { addView(box) })
-            .setPositiveButton("关闭", null)
-            .setNeutralButton("清空全部") { _, _ ->
-                AlertDialog.Builder(this)
-                    .setTitle("清空全部学习数据？")
-                    .setMessage("词频和习惯搭配都会清掉，打字记录会从头开始学。")
-                    .setPositiveButton("清空") { _, _ ->
-                        Prefs.saveWordStats(this, emptyMap())
-                        Prefs.savePairs(this, emptyMap())
-                        updateLearnDataValue()
-                        Toast.makeText(this, "已清空", Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-            }
-            .create()
-        val tops = words.entries.sortedByDescending { it.value.count }.take(50)
-        for (e in tops) {
-            lateinit var row: LinearLayout
-            row = ImUi.cardRow(
-                this,
-                iconRes = null,
-                title = e.key,
-                subtitle = "打过 ${e.value.count} 次",
-                right = ImUi.dangerText(this, "删除") {
-                    val m = Prefs.loadWordStats(this)
-                    m.remove(e.key)
-                    Prefs.saveWordStats(this, m)
-                    box.removeView(row)
-                    if (box.childCount == 0) {
-                        box.addView(ImUi.note(this, "（还没有学习记录）"), ImUi.lp(this, 10f, 14f))
-                    }
-                    updateLearnDataValue()
-                },
-            )
-            box.addView(row, ImUi.lp(this, 8f))
-        }
-        dialog.show()
     }
 
     // —————— 常用语列表 ——————

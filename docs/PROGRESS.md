@@ -5,22 +5,25 @@
 >
 > 最后更新：2026-10-19（**v0.2「手感与记忆」0.2.0 已上真机**：震动三档 / 候选上划译文 / 记忆与搭配 / 模糊音 /
 > 上滑数字 / 地球键 / 空格滑光标 / 生词角标 —— 代码与 33 项 JVM 单测通过，模拟器全项自检通过；
+> 真机返修：振动改按时长分档（5/15/30ms）、删「按键声音」与「学习记忆」设置入口；
 > **等真机手感反馈**。0.1.5 的 ZUI 强停根因见 M5.1g，用户暂缓；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
 
 ### v0.2「手感与记忆」实现（2026-10-19，模拟器全项自检通过，待真机手感验收）
 - **范围（用户拍板）**：批 1 震动三档 + 候选上划译文；批 2 记忆强化 + 排序调优 + 学习数据管理；
   小件 模糊音 / 字母键上滑数字符号 / 地球键 / 空格滑光标；另加生词高亮。
-- **震动三档**：`AndroidManifest` 加 `VIBRATE`；`Prefs.vibrateLevel`（weak/standard/strong，默认 weak），
-  参数 弱 8ms/46、标准 12ms/120、强 18ms/255（设备无幅度控制时退化时长）；设置页「按键」区新增「振动强度」。
-  **振幅/时长要真机校准**（模拟器无马达）。
+- **震动三档**：`AndroidManifest` 加 `VIBRATE`；`Prefs.vibrateLevel`（weak/standard/strong，默认 weak）。
+  本机（Lenovo L71091）振动器**不支持幅度控制**（dumpsys：`mCapabilities=[ON_CALLBACK]`、`mMaxAmplitudes count=0`），
+  幅度参数会被系统忽略 → **三档按时长拉开**：弱 5ms / 标准 15ms / 强 30ms（幅度 35/110/255 只留给支持幅度控制的设备）。
+  设置页「按键」区「振动强度」。**2026-10-19 用户反馈三档几乎无区别、弱档还偏强 → 改成时长分档并把弱档下调到 5ms。**
 - **候选上划译文**：`CandidateBar` 上划 26dp → `onSwipeUp`；只取第一条义项、去词性、日文去振假名
   （`GlossDict.inputFormFor` + `inputCache`）：你好→hello、开发→開発する；**无译文 / >4 字候选不动作**、上划不误上屏。
   英文模式上划 = 中文释义（hello→你好）。网格面板保留纵向滚动，不做上划。
 - **记忆（批 2）**：`Learning.kt` 纯逻辑 + 单测：词表 `词\t次数\t日序`（解析兼容旧两段格式，日序 0 = 未知）、
   搭配 `前词\t后词\t次数`（key 用 `\u0001` 连接）；加分 = `ln(1+min(count,200))*2.5` + 新鲜度
   （当日 2.5 / ≤7 天 1.2 / ≤30 天 0.4）+ 搭配 `ln(1+min(pair,20))*1.6`；上限 3000 词 / 1500 搭配，按次数剪枝。
-  Service 内 `wordStats/pairs` + `learnEpoch` 版本键缓存用户加分；设置页「学习记忆」= Top 50 / 删单条 / 清空全部
-  （同进程 SharedPreferences 监听器立刻 `reloadLearn()`；Service 自己写盘用 `selfPrefWrite` 防回读）。
+  Service 内 `wordStats/pairs` + `learnEpoch` 版本键缓存用户加分。**设置页不展示学习数据**
+  （2026-10-19 用户要求隐藏：输入法默默记住习惯就够了；`Prefs.loadWordStats/saveWordStats` 仍供 Service 用，
+  Service 自己写盘用 `selfPrefWrite` 防回读；prefListener 里的 `reloadLearn()` 保留，外部写盘时即时生效）。
 - **模糊音**：`engine/FuzzyVariants.kt` 做**查询变体扩展**（不改 dict.bin）：按音节切分、逐段展开（封顶 16 个）、
   三组：平翘舌 zh/z·ch/c·sh/s、前后鼻音 an/ang·en/eng·in/ing、n/l；尾巴规则先丢多打的鼻音
   （jintiang→jintian、tiangqi→tianqi、jintiann→jintian）；罚分 整段命中 1.2 / 前缀补全 2.2。
@@ -38,8 +41,12 @@
   实测模糊音 zongguo→中国 / languo→难过 / tiangqi→天气 均首位，原样输入不受影响；kaifa→开发者 置顶。
 - **模拟器自检（2026-10-19，全过）**：候选上划 你好→hello ✓；英文模式 hello→你好 ✓；
   空格左滑 2 格后 ⌫ 得 helo ✓（滑过不出空格）；r 上滑打 4 ✓；长按中/英 弹「选择输入法」✓；
-  设置页 振动强度 / 模糊音 / 学习数据 三行 ✓；学习数据删单条 + 空状态 ✓；模糊音全选后 zongguo→中国 ✓；
+  设置页 振动强度 / 模糊音 两行 ✓；模糊音全选后 zongguo→中国 ✓；
   候选栏与网格 B2/C2 角标位置正常 ✓（网格纵向滚动正常、未误上屏）。
+- **2026-10-19 真机反馈返修**：① 振动三档改按时长 5/15/30ms（该机无幅度控制）；② 删除「按键声音」设置行，
+  `AudioManager` 音效代码与 `Prefs.KEY_SOUND/isSoundOn` 一并删除；③ 设置页隐藏「学习记忆」区
+  （`showLearnDataDialog` / `updateLearnDataValue` / `ic_sound.xml` / `ic_memory.xml` 删除，学习逻辑不动）。
+  已重新构建安装（0.2.0），模拟器设置页复核通过。
 - **待办**：① 真机手感验收（震动强弱、上划阈值 26dp、空格滑步长 16dp、角标观感）；
   ② 排序「对症调优」需用户给 2~3 个失败实例（或同意临时调试版记录）。
 - **真机（Lenovo L71091）已装 0.2.0**（versionCode 7，2026-10-19；安装覆盖保留 0.1.5 数据，
@@ -871,8 +878,9 @@ java tools\dictgen\GlossGen.java reference\qingjian-repo\assets\glossary\glossar
   **设置系页面（设置/许可）= 卡片风格**（M5.1：顶部「← 标题」栏 + 分区 accent 小标题 + 每行 22dp 圆角卡片 +
   圆形图标泡；`ImUi.kt` 共用样式 + `res/drawable/ic_*.xml` 矢量图标）；**应用图标 = B 墨底蓝简**
   （M5.1：`tools/icon/gen_icon.py`，墨底 #17191E + 蓝简 #5B8DEF，自适应前景字形 0.43 画布）
-- **v0.2 参数（真机待校准）**：震动 = `Prefs.VIBRATE_*`（弱 8ms/46、标准 12ms/120、强 18ms/255，
-  `JianjiImeService.rebuildVibration()`）；候选上划阈值 26dp（`CandidateBar.swipeUpSlop`）；
+- **v0.2 参数（真机待校准）**：震动 = `Prefs.VIBRATE_*`（**按时长分档：弱 5ms / 标准 15ms / 强 30ms**；
+  本机无幅度控制，幅度 35/110/255 只对支持幅度控制的设备生效，`JianjiImeService.rebuildVibration()`）；
+  候选上划阈值 26dp（`CandidateBar.swipeUpSlop`）；
   空格横滑 16dp/步 + 字母键上滑 34dp（`KeyboardView`）；记忆权重/上限在 `Learning.kt`；
   模糊音展开在 `FuzzyVariants.kt`、罚分 `FlatPinyinEngine.FUZZY_EXACT_PENALTY/FUZZY_PREFIX_PENALTY`；
   角标门槛 `LevelDict.markFor`（≥3 = B2/N2，颜色 `ImTheme.candMark`）。**改完先跑 `gradle :app:testDebugUnitTest` 再上机**

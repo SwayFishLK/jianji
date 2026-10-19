@@ -7,17 +7,10 @@ import android.content.SharedPreferences
 object Prefs {
     private const val NAME = "jianji_prefs"
 
-    const val KEY_SOUND = "key_sound"
     const val KEY_VIBRATE = "key_vibrate"
 
     fun get(context: Context): SharedPreferences =
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
-
-    fun isSoundOn(context: Context): Boolean =
-        get(context).getBoolean(KEY_SOUND, true)
-
-    fun setSoundOn(context: Context, on: Boolean) =
-        get(context).edit().putBoolean(KEY_SOUND, on).apply()
 
     fun isVibrateOn(context: Context): Boolean =
         get(context).getBoolean(KEY_VIBRATE, true)
