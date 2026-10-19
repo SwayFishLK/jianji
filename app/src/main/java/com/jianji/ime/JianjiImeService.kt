@@ -722,8 +722,9 @@ class JianjiImeService : InputMethodService() {
     }
 
     /**
-     * 一次组句整串上屏：2~4 字的串记一次「习惯」（串 → 拼音连写 + 次数）；
+     * 一次组句整串上屏：2~4 字的串记一次「习惯」（串 → 整段拼音 + 次数）；
      * 次数达到 Learning.PHRASE_MIN_COUNT 后整串出现在候选里 —— 只打一次不会记住。
+     * 次数只增不减、拼音只升不降（见 Learning.mergePhrase）：用简拼上屏不会把记忆弄丢。
      */
     private fun finishPhraseSession() {
         val text = sessionText.toString()
@@ -732,9 +733,7 @@ class JianjiImeService : InputMethodService() {
         sessionPinyin.setLength(0)
         if (text.length < 2 || text.length > Learning.MAX_PHRASE_CHARS) return
         if (pinyin.length < text.length) return
-        val old = phrases[text]
-        val count = if (old != null && old.pinyin == pinyin) old.count + 1 else 1
-        phrases[text] = Learning.PhraseStat(pinyin, count, Learning.today())
+        phrases[text] = Learning.mergePhrase(phrases[text], pinyin, Learning.today())
         Learning.prunePhrases(phrases)
         selfPrefWrite = true
         Prefs.savePhrases(this, phrases)
@@ -742,7 +741,7 @@ class JianjiImeService : InputMethodService() {
         rebuildPhraseIndex()
     }
 
-    /** 短语候选索引（门槛内的短语；词库就绪后补简拼，切不开的短语只认全拼） */
+    /** 短语候选索引（门槛内的短语；词库就绪后补音节切分，切不开的短语只按整段匹配） */
     private fun rebuildPhraseIndex() {
         if (phrases.isEmpty()) {
             phraseIndex.rebuild(emptyList())
@@ -751,7 +750,9 @@ class JianjiImeService : InputMethodService() {
         val d = dict
         val list = ArrayList<PhraseIndex.Entry>(phrases.size)
         for ((text, st) in phrases) {
-            list.add(PhraseIndex.Entry(text, st.pinyin, d?.initialsOf(st.pinyin, text.length), st.count, st.day))
+            list.add(
+                PhraseIndex.Entry(text, st.pinyin, d?.syllablesOf(st.pinyin, text.length), st.count, st.day),
+            )
         }
         phraseIndex.rebuild(list)
     }

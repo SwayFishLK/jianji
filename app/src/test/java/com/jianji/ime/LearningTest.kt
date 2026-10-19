@@ -114,6 +114,25 @@ class LearningTest {
         assertTrue("门槛次数的分要够高（压常用单字）：$c3", c3 > 12f)
     }
 
+    /** 回归：一次整串上屏的落库规则 —— 次数只增不减、拼音只升不降（简拼不再把记忆覆盖坏） */
+    @Test
+    fun `短语落库：次数只增不减、拼音只升不降`() {
+        val day = 20000L
+        val first = Learning.mergePhrase(null, "wutiaowu", day)
+        assertEquals(Learning.PhraseStat("wutiaowu", 1, day), first)
+
+        val viaAbbrev = Learning.mergePhrase(first, "wtw", day)
+        assertEquals("简拼不覆盖全拼", "wutiaowu", viaAbbrev.pinyin)
+        assertEquals("次数照涨", 2, viaAbbrev.count)
+
+        val upgraded = Learning.mergePhrase(viaAbbrev, "wutiaowu", day)
+        assertEquals(3, upgraded.count)
+
+        val healed = Learning.mergePhrase(Learning.PhraseStat("wtw", 4, day), "wutiaowu", day)
+        assertEquals("坏记录被全拼修回", "wutiaowu", healed.pinyin)
+        assertEquals(5, healed.count)
+    }
+
     @Test
     fun `短语瘦身按次数 + 新鲜度`() {
         val m = HashMap<String, Learning.PhraseStat>()

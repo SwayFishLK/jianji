@@ -8,7 +8,7 @@ import kotlin.math.min
  *
  *  - 用户词表：词 → 打过几次 + 最近使用日（本地日序）；
  *  - 搭配表：前一个上屏词 → 后一个上屏词 的次数（词→词 bigram-lite，不用联网、不建索引）；
- *  - 自造短语：整串重复输入（≥ PHRASE_MIN_COUNT 次）→ 记「串 → 拼音」，以后全拼 / 简拼都出整串候选；
+ *  - 自造短语：整串重复输入（≥ PHRASE_MIN_COUNT 次）→ 记「串 → 整段拼音」，以后全拼 / 简拼 / 混着打都出整串候选；
  *  - 候选加分 = 次数（对数、封顶）+ 新鲜度（今天/一周/一月）+ 搭配。
  *
  * 存储串（Prefs）：词表 `词\t次数\t日序`，搭配 `前词\t后词\t次数`，短语 `串\t拼音\t次数\t日序`；
@@ -31,7 +31,7 @@ object Learning {
     /** 「频繁输入」门槛：同一串整段上屏这么多次后，短语才作为候选出现（只打一次不会记住） */
     const val PHRASE_MIN_COUNT = 3
 
-    /** 全拼命中短语所需的最短输入：wu 太短会抢常用字的候选位，wutiaow 起给 */
+    /** 只打到短语前几个音节时命中所需的最短输入：wu 太短会抢常用字的候选位，wutiao 起给 */
     const val PHRASE_MIN_QUERY = 4
 
     /** 次数加分：1 次 ≈ +1.7、10 次 ≈ +6.0、200 次封顶 ≈ +13.3 */
@@ -109,8 +109,22 @@ object Learning {
 
     // —————— 自造短语（v0.2）：同一串重复输入 → 整串成为候选（全拼 / 简拼都出） ——————
 
-    /** 自造短语：拼音（字母连写）+ 整串上屏次数 + 最近使用日 */
+    /** 自造短语：整段拼音（尽量留最长形态，简拼不算）+ 整串上屏次数 + 最近使用日 */
     data class PhraseStat(val pinyin: String, val count: Int, val day: Long)
+
+    /**
+     * 一次整串上屏 → 新的短语记录（纯逻辑，服务端直接落库）：
+     *
+     *  - 次数只增不减：用简拼 wtw 上屏不该把打全拼攒够的次数清零（次数一清零记忆就「消失」了）；
+     *  - 拼音只升不降：wtw / wutw 只是全拼 wutiaowu 的简写，别把全拼覆盖没了；
+     *    旧机器上已被简写覆盖坏掉的记录，下次再打一遍全拼就会自动修回来。
+     */
+    fun mergePhrase(old: PhraseStat?, pinyin: String, day: Long): PhraseStat =
+        if (old == null) {
+            PhraseStat(pinyin, 1, day)
+        } else {
+            PhraseStat(if (pinyin.length > old.pinyin.length) pinyin else old.pinyin, old.count + 1, day)
+        }
 
     fun parsePhrases(raw: String?): HashMap<String, PhraseStat> {
         val map = HashMap<String, PhraseStat>(64)
