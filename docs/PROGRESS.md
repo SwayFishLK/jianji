@@ -104,16 +104,22 @@
 - **可调常数（一处改）**：`Learning.PHRASE_MIN_COUNT`（门槛次数）、`MAX_PHRASE_CHARS`（串长上限）、
   `PHRASE_MIN_QUERY`（只打到前几个音节时所需最短输入）、`PHRASE_BASE/PHRASE_WEIGHT`（排序强弱）。
 - **发布（2026-10-20）**：用户真机验收通过（「按音节分段、不许跳音节」这条边界他也认可）→ main 推送到
-  `ce6a237`；GitHub Release **v0.2.0**：https://github.com/SwayFishLK/jianji/releases/tag/v0.2.0
+  `e042791`；GitHub Release **v0.2.0**：https://github.com/SwayFishLK/jianji/releases/tag/v0.2.0
   （资产 `jianji-v0.2.0.apk`）；交付副本 `D:\Fish\Documents\简记输入法-v0.2.0.apk`
   （7,803,647 字节，SHA-256 `6c1c5f91270b053840c952bf9c59df86a5d6185fb661953d1dc3ba8e1467c832`）。
 - **运维坑**：仓库本地配了 `http.proxy=http://127.0.0.1:7897`；本机代理软件没启动时 git 连不上、gh 却能直连。
   直连可用时推送用 `git -c http.proxy= -c https.proxy= push origin main`。
+- **公开历史清洗（2026-10-20，用户要求）**：AGENTS.md（本地开发约定）从 0.1.2 起随仓库公开，用户要求彻底抹掉。
+  处理过程：`git-filter-repo --invert-paths --path AGENTS.md` 重写全部 16 个提交（tag 随之重指：
+  v0.1.5 → `a45d99b`、v0.2.0 → `e042791`）；force push 后**GitHub 仍缓存旧 SHA**（实测旧 SHA 的 AGENTS.md 还能读），
+  于是**删除并重建仓库**（原 0 星 0 fork、无 issue/PR）：重推 main 与 tag、按原说明与 APK 重发两个 Release
+  （资产名 / 大小 / SHA-256 全部与原版一致）。旧 SHA 与旧 blob 页面现已 404。AGENTS.md 仍在本地并已进 `.gitignore`。
+  重写前的完整历史备份：`D:\Fish\Documents\jianji-backup-2026-10-20.bundle`（**含 AGENTS.md，不要公开**）。
 
 ### 项目改名：`shurufa` → `jianji`（2026-10-18 下午）
 - 资源管理器直接改名一直报「被占用」：占用者 = opencode 进程 ×2 + `adb.exe`（adb server 的 cwd 卡在文件夹里）。
   杀 adb 后，用「整体搬家」解决：全内容 `Move-Item` 进新建 `jianji` → 删空壳 `shurufa`（成功）→ 改名实际完成。
-- 已同步 4 处路径引用：`local.properties`（`sdk.dir`）、`AGENTS.md`、`docs/dev-env.md`、`docs/PROGRESS.md`；
+- 已同步 4 处路径引用：`local.properties`（`sdk.dir`）、本地约定（不入库）、`docs/dev-env.md`、`docs/PROGRESS.md`；
   源码扫描无 `shurufa` 残留（仅 `app/build` 历史日志含旧绝对路径，随下次构建刷新）。
 - 构建验证：`gradle :app:testDebugUnitTest :app:assembleRelease` BUILD SUCCESSFUL（15s；配置缓存因路径变更重建），
   release APK 7,685,983 字节（与交付副本同大小，未重新分发）。
@@ -895,7 +901,7 @@ java tools\dictgen\GlossGen.java reference\qingjian-repo\assets\glossary\glossar
 
 - **终端一律用 PowerShell 7（`pwsh`），不用 Windows PowerShell 5.1**（用户 2026-10-18 明确要求）。
   本机 pwsh = `C:\Users\Fish\AppData\Local\Microsoft\WindowsApps\pwsh.exe`（7.6.7）；
-  在 5.1 宿主里跑脚本用 `pwsh -NoProfile -EncodedCommand <base64(UTF16LE)>` 包装（见根目录 `AGENTS.md`）
+  在 5.1 宿主里跑脚本用 `pwsh -NoProfile -EncodedCommand <base64(UTF16LE)>` 包装（见本地约定，不入库）
 - 许可 GPL-3.0-or-later；青简数据（dict / glossary / levels）直接复用，需在应用内与 `NOTICE` 署名
   （M5 已建：根 `NOTICE` + `app/src/main/assets/legal/` + 设置页「开源许可与署名」入口）
 - 引擎纯 Kotlin 自研、接口化（`PinyinEngine`），不引 NDK；继承青简原则：
