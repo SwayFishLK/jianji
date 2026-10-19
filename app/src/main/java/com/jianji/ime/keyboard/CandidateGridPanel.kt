@@ -50,10 +50,10 @@ class CandidateGridPanel(context: Context) : View(context) {
         textSize = trSize
     }
 
-    /** 生词等级角标（右上角小字，同候选栏） */
+    /** 生词等级角标（右上角小字，同候选栏；略小、抬高，避开译文） */
     private val markPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.RIGHT
-        textSize = dp(9f)
+        textSize = dp(8.5f)
     }
 
     private var downX = 0f
@@ -129,7 +129,7 @@ class CandidateGridPanel(context: Context) : View(context) {
                     canvas.drawText(
                         mk,
                         (c + 1) * cw - dp(5f),
-                        top + cellH * 0.20f - (fmM.ascent + fmM.descent) / 2f,
+                        top + cellH * 0.16f - (fmM.ascent + fmM.descent) / 2f,
                         markPaint,
                     )
                 }

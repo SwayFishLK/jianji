@@ -1,10 +1,15 @@
 package com.jianji.ime
 
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -220,4 +225,209 @@ object ImUi {
         setLineSpacing(dp(a, 3f).toFloat(), 1f)
         setTextIsSelectable(true)
     }
+
+    // —————— 二级选择面板（单选 / 多选） ——————
+
+    /**
+     * 与设置页同一套卡片风格的二级选择面板：圆角深色面板、圆角选项行、
+     * 右侧圆形（单选）/ 方形（多选）勾选标记、底部「取消 / 确定」。
+     *
+     * @param checked 初始选中状态（会被就地修改）
+     * @param multi true = 多选（点行切换，底部「确定」生效）；false = 单选（点行立即回调并关闭）
+     */
+    fun choiceDialog(
+        a: Context,
+        title: String,
+        options: List<String>,
+        checked: BooleanArray,
+        multi: Boolean,
+        note: String? = null,
+        onPick: ((Int) -> Unit)? = null,
+        onConfirm: ((BooleanArray) -> Unit)? = null,
+    ): android.app.Dialog {
+        val dialog = android.app.Dialog(a)
+        val root = LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(a, 20f), dp(a, 20f), dp(a, 20f), dp(a, 16f))
+            background = rounded(a, 0xFF232833.toInt(), 24f)
+        }
+        root.addView(
+            TextView(a).apply {
+                text = title
+                setTextColor(TEXT)
+                textSize = 17.5f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            },
+        )
+        if (!note.isNullOrEmpty()) {
+            root.addView(
+                TextView(a).apply {
+                    text = note
+                    setTextColor(SUB)
+                    textSize = 12.5f
+                    setLineSpacing(dp(a, 2f).toFloat(), 1f)
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(a, 6f) },
+            )
+        }
+
+        val renders = ArrayList<() -> Unit>(options.size)
+        for (idx in options.indices) {
+            val row = LinearLayout(a).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(a, 16f), dp(a, 13f), dp(a, 14f), dp(a, 13f))
+                isClickable = true
+            }
+            row.addView(
+                TextView(a).apply {
+                    text = options[idx]
+                    textSize = 14.5f
+                    maxLines = 3
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            val badge = LinearLayout(a).apply { gravity = Gravity.CENTER }
+            row.addView(
+                badge,
+                LinearLayout.LayoutParams(dp(a, 20f), dp(a, 20f)).apply { leftMargin = dp(a, 12f) },
+            )
+            root.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(a, 8f) },
+            )
+
+            val render = {
+                val on = checked[idx]
+                row.background = optionBg(a, on)
+                (row.getChildAt(0) as TextView).setTextColor(if (on) TEXT else CARD_TEXT2)
+                badge.background = badgeBg(a, on, multi)
+                badge.removeAllViews()
+                if (on) {
+                    if (multi) {
+                        badge.addView(
+                            TextView(a).apply {
+                                text = "✓"
+                                setTextColor(Color.WHITE)
+                                textSize = 12f
+                                gravity = Gravity.CENTER
+                                includeFontPadding = false
+                            },
+                        )
+                    } else {
+                        badge.addView(
+                            View(a).apply {
+                                background = GradientDrawable().apply {
+                                    shape = GradientDrawable.OVAL
+                                    setColor(Color.WHITE)
+                                }
+                            },
+                            LinearLayout.LayoutParams(dp(a, 8f), dp(a, 8f)),
+                        )
+                    }
+                }
+            }
+            renders.add(render)
+            render()
+            row.setOnClickListener {
+                if (multi) {
+                    checked[idx] = !checked[idx]
+                } else {
+                    for (k in checked.indices) checked[k] = k == idx
+                }
+                renders.forEach { it.invoke() }
+                if (!multi) {
+                    onPick?.invoke(idx)
+                    dialog.dismiss()
+                }
+            }
+        }
+
+        val btnRow = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        }
+        btnRow.addView(
+            TextView(a).apply {
+                text = "取消"
+                setTextColor(SUB)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(a, 18f), dp(a, 10f), dp(a, 18f), dp(a, 10f))
+                isClickable = true
+                setOnClickListener { dialog.dismiss() }
+            },
+        )
+        if (multi) {
+            btnRow.addView(
+                pillButton(a, "确定") {
+                    onConfirm?.invoke(checked)
+                    dialog.dismiss()
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { leftMargin = dp(a, 6f) },
+            )
+        }
+        root.addView(
+            btnRow,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(a, 14f) },
+        )
+
+        dialog.setContentView(root)
+        dialog.show()
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0.58f)
+            val maxW = dp(a, 340f)
+            val screenW = a.resources.displayMetrics.widthPixels - dp(a, 48f)
+            setLayout(minOf(maxW, screenW), ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        return dialog
+    }
+
+    /** 选项行背景：选中 = accent 淡底 + 描边；未选中 = 卡片色；按下再提亮 */
+    private fun optionBg(a: Context, selected: Boolean): Drawable {
+        fun shape(color: Int): GradientDrawable = GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(a, 15f).toFloat()
+            if (selected) setStroke(dp(a, 1f), withAlpha(ACCENT, 0x66))
+        }
+        val sl = StateListDrawable()
+        sl.addState(
+            intArrayOf(android.R.attr.state_pressed),
+            shape(if (selected) withAlpha(ACCENT, 0x3D) else 0xFF2E3542.toInt()),
+        )
+        sl.addState(
+            intArrayOf(),
+            shape(if (selected) withAlpha(ACCENT, 0x26) else 0xFF2A303B.toInt()),
+        )
+        return sl
+    }
+
+    /** 勾选标记：单选圆 / 多选圆角方；选中 accent 实底 */
+    private fun badgeBg(a: Context, checked: Boolean, multi: Boolean): GradientDrawable =
+        GradientDrawable().apply {
+            if (multi) cornerRadius = dp(a, 6f).toFloat() else shape = GradientDrawable.OVAL
+            if (checked) {
+                setColor(ACCENT)
+            } else {
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(a, 1.5f), 0xFF5A6373.toInt())
+            }
+        }
+
+    private fun withAlpha(color: Int, alpha: Int): Int =
+        (color and 0x00FFFFFF) or (alpha shl 24)
 }

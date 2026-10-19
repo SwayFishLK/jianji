@@ -65,4 +65,14 @@ object Prefs {
 
     fun setLearnLang(context: Context, lang: String) =
         get(context).edit().putString(KEY_LEARN_LANG, lang).apply()
+
+    // —————— v0.2：生词标记（候选右上角 B2 / N2 及以上等级角标，默认开） ——————
+
+    const val KEY_LEVEL_MARK = "level_mark"
+
+    fun isLevelMarkOn(context: Context): Boolean =
+        get(context).getBoolean(KEY_LEVEL_MARK, true)
+
+    fun setLevelMarkOn(context: Context, on: Boolean) =
+        get(context).edit().putBoolean(KEY_LEVEL_MARK, on).apply()
 }

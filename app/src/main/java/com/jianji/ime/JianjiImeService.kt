@@ -152,6 +152,9 @@ class JianjiImeService : InputMethodService() {
     /** 按键振动开关 = 用户偏好 && 系统触感设置（随偏好变化实时刷新） */
     private var vibrateOn = true
 
+    /** 生词标记开关（设置页可关；关掉只影响角标，译文照常） */
+    private var levelMarkOn = true
+
     /** 振动强度档位（弱 / 标准 / 强；默认弱，按时长分档，真机校准） */
     private var vibrateLevel = Prefs.VIBRATE_WEAK
     private var vibrator: Vibrator? = null
@@ -767,12 +770,15 @@ class JianjiImeService : InputMethodService() {
         updateRightButton()
     }
 
-    /** 英文候选的生词角标（CEFR；等级表按小写入库） */
-    private fun englishMark(word: String): String? =
-        levelsEn?.markFor(word.lowercase(Locale.ROOT))
+    /** 英文候选的生词角标（CEFR；等级表按小写入库）；设置里关掉就不查 */
+    private fun englishMark(word: String): String? {
+        if (!levelMarkOn) return null
+        return levelsEn?.markFor(word.lowercase(Locale.ROOT))
+    }
 
     /** 中文候选的生词角标：看学习语言译文的「可输入形态」（英语查 CEFR、日语查 JLPT） */
     private fun chineseMark(word: String, g: GlossDict?): String? {
+        if (!levelMarkOn) return null
         val form = g?.inputFormFor(word) ?: return null
         return when (glossLang) {
             "en" -> levelsEn?.markFor(form.lowercase(Locale.ROOT))
@@ -1104,6 +1110,7 @@ class JianjiImeService : InputMethodService() {
         val haptic = systemSwitchOn(Settings.System.HAPTIC_FEEDBACK_ENABLED)
         vibrateOn = Prefs.isVibrateOn(this) && haptic
         vibrateLevel = Prefs.vibrateLevel(this)
+        levelMarkOn = Prefs.isLevelMarkOn(this)
     }
 
     private fun systemSwitchOn(key: String): Boolean = try {

@@ -63,10 +63,10 @@ class CandidateBar(context: Context) : View(context) {
         textSize = trSize
     }
 
-    /** 生词等级角标（右上角小字） */
+    /** 生词等级角标（右上角小字；比译文再小一号，抬高一点避免和译文贴住） */
     private val markPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.RIGHT
-        textSize = dp(9.5f)
+        textSize = dp(8.5f)
     }
 
     /** 首选候选的高亮药丸（对齐视觉稿 .cand.sel：accent 16% 底 + 50% 描边） */
@@ -168,7 +168,7 @@ class CandidateBar(context: Context) : View(context) {
                 if (mk != null) {
                     markPaint.color = ImTheme.candMark
                     val fmM = markPaint.fontMetrics
-                    canvas.drawText(mk, x + w - dp(6f), h * 0.22f - (fmM.ascent + fmM.descent) / 2f, markPaint)
+                    canvas.drawText(mk, x + w - dp(6f), h * 0.17f - (fmM.ascent + fmM.descent) / 2f, markPaint)
                 }
             }
             x += w + gap

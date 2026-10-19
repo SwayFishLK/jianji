@@ -1,7 +1,6 @@
 package com.jianji.ime
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
@@ -77,6 +76,24 @@ class SettingsActivity : Activity() {
                 chevron = true,
             ) { showLearnLangDialog() },
             ImUi.lp(this, 10f),
+        )
+        box.addView(
+            ImUi.cardRow(
+                this,
+                iconRes = R.drawable.ic_level,
+                title = "生词标记",
+                right = Switch(this).apply {
+                    isChecked = Prefs.isLevelMarkOn(this@SettingsActivity)
+                    setOnCheckedChangeListener { _, on ->
+                        Prefs.setLevelMarkOn(this@SettingsActivity, on)
+                    }
+                },
+            ),
+            ImUi.lp(this, 8f),
+        )
+        box.addView(
+            ImUi.note(this, "在候选右上角标出译词的难度（B2 / C1 / C2，日语 N2 / N1），入门词不标。"),
+            ImUi.lp(this, 10f, 14f, 14f),
         )
 
         // —— 按键 ——
@@ -234,18 +251,21 @@ class SettingsActivity : Activity() {
     // —————— 学习语言 ——————
 
     private fun showLearnLangDialog() {
-        val labels = arrayOf("英语", "日语", "不显示")
+        val labels = listOf("英语", "日语", "不显示")
         val keys = arrayOf("en", "ja", "off")
         val cur = keys.indexOf(Prefs.learnLang(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle("学习语言")
-            .setSingleChoiceItems(labels, cur) { dialog, which ->
+        ImUi.choiceDialog(
+            this,
+            title = "学习语言",
+            options = labels,
+            checked = BooleanArray(labels.size) { it == cur },
+            multi = false,
+            note = "一次只学一种；选「不显示」就不出译词。",
+            onPick = { which ->
                 Prefs.setLearnLang(this, keys[which])
                 updateLangValue()
-                dialog.dismiss()
-            }
-            .setNegativeButton("取消", null)
-            .show()
+            },
+        )
     }
 
     private fun updateLangValue() {
@@ -260,18 +280,21 @@ class SettingsActivity : Activity() {
     // —————— 振动强度（v0.2） ——————
 
     private fun showVibrateLevelDialog() {
-        val labels = arrayOf("弱", "标准", "强")
+        val labels = listOf("弱", "标准", "强")
         val keys = arrayOf(Prefs.VIBRATE_WEAK, Prefs.VIBRATE_STANDARD, Prefs.VIBRATE_STRONG)
         val cur = keys.indexOf(Prefs.vibrateLevel(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle("振动强度")
-            .setSingleChoiceItems(labels, cur) { dialog, which ->
+        ImUi.choiceDialog(
+            this,
+            title = "振动强度",
+            options = labels,
+            checked = BooleanArray(labels.size) { it == cur },
+            multi = false,
+            note = "回到键盘按键试手感；弱档只是轻轻一点。",
+            onPick = { which ->
                 Prefs.setVibrateLevel(this, keys[which])
                 updateVibrateLevelValue()
-                dialog.dismiss()
-            }
-            .setNegativeButton("取消", null)
-            .show()
+            },
+        )
     }
 
     private fun updateVibrateLevelValue() {
@@ -287,22 +310,25 @@ class SettingsActivity : Activity() {
 
     private fun showFuzzyDialog() {
         val keys = arrayOf("zh", "nasal", "nl")
-        val labels = arrayOf(
+        val labels = listOf(
             "平翘舌（zh/z、ch/c、sh/s）",
             "前后鼻音（ang/an、eng/en、ing/in）",
             "n 与 l（拿 / 拉）",
         )
         val have = Prefs.fuzzyGroups(this).split(',').toHashSet()
         val checked = BooleanArray(keys.size) { keys[it] in have }
-        AlertDialog.Builder(this)
-            .setTitle("模糊音")
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
-            .setPositiveButton("确定") { _, _ ->
-                Prefs.setFuzzyGroups(this, keys.filterIndexed { i, _ -> checked[i] }.joinToString(","))
+        ImUi.choiceDialog(
+            this,
+            title = "模糊音",
+            options = labels,
+            checked = checked,
+            multi = true,
+            note = "可同时开启多组；开启后打错也能出对词。",
+            onConfirm = { result ->
+                Prefs.setFuzzyGroups(this, keys.filterIndexed { i, _ -> result[i] }.joinToString(","))
                 updateFuzzyValue()
-            }
-            .setNegativeButton("取消", null)
-            .show()
+            },
+        )
     }
 
     private fun updateFuzzyValue() {
