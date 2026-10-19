@@ -57,6 +57,33 @@ class JianDict private constructor(
     /** 简拼序下标 j → 主表词条下标 */
     fun entryOfInitials(j: Int): Int = initialsIdx[j]
 
+    // —————— 连写拼音 → 简拼（自造短语用：wutiaowu → wtw） ——————
+
+    /**
+     * 把一段连写拼音按「恰好 syllables 个音节」切开，返回每个音节首字母。
+     * 长音节优先、回溯找可行切法；切不开（非法音节 / 音节数对不上）返回 null，
+     * 调用方退回「只认全拼」。syllables 用短语字数（汉字一字一音节）。
+     */
+    fun initialsOf(pinyin: String, syllables: Int): String? {
+        val n = pinyin.length
+        if (syllables <= 0 || n < syllables) return null
+        val acc = StringBuilder(syllables)
+        fun dfs(pos: Int, need: Int): String? {
+            if (need == 0) return if (pos == n) acc.toString() else null
+            val maxLen = minOf(maxSyllableLen, n - pos - (need - 1))
+            for (l in maxLen downTo 1) {
+                val syl = pinyin.substring(pos, pos + l)
+                if (syl !in syllableSet) continue
+                acc.append(syl[0])
+                val r = dfs(pos + l, need - 1)
+                if (r != null) return r
+                acc.setLength(acc.length - 1)
+            }
+            return null
+        }
+        return dfs(0, syllables)
+    }
+
     // —————— 内部 ——————
 
     private fun compare(blob: ByteArray, off: Int, end: Int, q: String): Int {

@@ -76,6 +76,10 @@ class JianjiImeService : InputMethodService() {
     /** 拼音引擎（词库异步载入，载好前只显示内联拼音） */
     @Volatile
     private var engine: PinyinEngine? = null
+
+    /** 词库（自造短语的简拼切分用；与引擎一起异步载入） */
+    @Volatile
+    private var dict: JianDict? = null
     private val pinyin = StringBuilder()
     private var candidates: List<Candidate> = emptyList()
     private var englishMode = false
@@ -84,6 +88,14 @@ class JianjiImeService : InputMethodService() {
 
     private val wordStats = HashMap<String, Learning.WordStat>()
     private val pairs = HashMap<String, Int>()
+
+    /** 自造短语：整串重复输入学到的习惯（见 PhraseIndex / Learning） */
+    private val phrases = HashMap<String, Learning.PhraseStat>()
+    private val phraseIndex = PhraseIndex()
+
+    /** 本次组句累计的「已上屏文本 / 已消费拼音」（学整串用：wutiaowu → 五 条 悟 → 五条悟） */
+    private val sessionText = StringBuilder()
+    private val sessionPinyin = StringBuilder()
 
     /** 刚上屏的词（搭配上下文；换输入框/会话时清空） */
     private var lastCommitted: String? = null
@@ -168,7 +180,8 @@ class JianjiImeService : InputMethodService() {
             when (key) {
                 Prefs.KEY_LEARN_LANG -> onLearnLangChanged()
                 Prefs.KEY_VIBRATE_LEVEL -> rebuildVibration()
-                Prefs.KEY_USER_WORDS, Prefs.KEY_PAIRS -> if (!selfPrefWrite) reloadLearn()
+                Prefs.KEY_USER_WORDS, Prefs.KEY_PAIRS, Prefs.KEY_PHRASES ->
+                    if (!selfPrefWrite) reloadLearn()
             }
         }
 
@@ -244,18 +257,23 @@ class JianjiImeService : InputMethodService() {
         rebuildVibration()
         wordStats.putAll(Prefs.loadWordStats(this))
         pairs.putAll(Prefs.loadPairs(this))
+        phrases.putAll(Prefs.loadPhrases(this))
         // 词库异步预载（~4.5MB），避免首次按键时卡顿
         Thread({
             engine = try {
-                val dict = assets.open("dict.bin").use { JianDict.load(it) }
+                val d = assets.open("dict.bin").use { JianDict.load(it) }
+                dict = d
                 FlatPinyinEngine(
-                    dict,
+                    d,
                     userBoost = { w -> userBoost(w) },
                     fuzzyMask = { fuzzyMask() },
+                    phraseHits = { q -> phraseIndex.hits(q, Learning.today()) },
                 )
             } catch (t: Throwable) {
                 null
             }
+            // 短语简拼要用词库音节表切分，词库就绪后补建索引
+            mainHandler.post { rebuildPhraseIndex() }
         }, "jianji-dict-load").start()
         // 释义表异步预载（~3.5–5MB，M3；语言变化时按需重载）
         ensureGloss()
@@ -612,14 +630,19 @@ class JianjiImeService : InputMethodService() {
     private fun commitCandidateText(c: Candidate, text: String) {
         val ic = currentInputConnection ?: return
         learn(c.text)
-        if (c.consumed in 1 until pinyin.length) {
-            val rest = pinyin.substring(c.consumed)
+        val consumed = if (c.consumed in 1..pinyin.length) c.consumed else pinyin.length
+        val chunk = pinyin.substring(0, consumed)
+        if (consumed < pinyin.length) {
+            val rest = pinyin.substring(consumed)
             ic.commitText(text, 1)
             pinyin.setLength(0)
             pinyin.append(rest)
+            sessionAppend(chunk, text)
             updateComposing()
         } else {
             ic.commitText(text, 1)
+            sessionAppend(chunk, text)
+            finishPhraseSession()
             clearComposing()
         }
     }
@@ -679,7 +702,58 @@ class JianjiImeService : InputMethodService() {
         wordStats.putAll(Prefs.loadWordStats(this))
         pairs.clear()
         pairs.putAll(Prefs.loadPairs(this))
+        phrases.clear()
+        phrases.putAll(Prefs.loadPhrases(this))
         learnEpoch++
+        rebuildPhraseIndex()
+    }
+
+    // —————— 自造短语（v0.2）：整串重复输入 → 全拼 / 简拼都出整串候选（见 Learning / PhraseIndex） ——————
+
+    /** 组句会话累计：文本必须是纯汉字（上划译文 / 英文串打断本次累计） */
+    private fun sessionAppend(chunk: String, text: String) {
+        if (!Learning.cjkOnly(text)) {
+            sessionText.setLength(0)
+            sessionPinyin.setLength(0)
+            return
+        }
+        sessionText.append(text)
+        sessionPinyin.append(chunk)
+    }
+
+    /**
+     * 一次组句整串上屏：2~4 字的串记一次「习惯」（串 → 拼音连写 + 次数）；
+     * 次数达到 Learning.PHRASE_MIN_COUNT 后整串出现在候选里 —— 只打一次不会记住。
+     */
+    private fun finishPhraseSession() {
+        val text = sessionText.toString()
+        val pinyin = sessionPinyin.toString()
+        sessionText.setLength(0)
+        sessionPinyin.setLength(0)
+        if (text.length < 2 || text.length > Learning.MAX_PHRASE_CHARS) return
+        if (pinyin.length < text.length) return
+        val old = phrases[text]
+        val count = if (old != null && old.pinyin == pinyin) old.count + 1 else 1
+        phrases[text] = Learning.PhraseStat(pinyin, count, Learning.today())
+        Learning.prunePhrases(phrases)
+        selfPrefWrite = true
+        Prefs.savePhrases(this, phrases)
+        selfPrefWrite = false
+        rebuildPhraseIndex()
+    }
+
+    /** 短语候选索引（门槛内的短语；词库就绪后补简拼，切不开的短语只认全拼） */
+    private fun rebuildPhraseIndex() {
+        if (phrases.isEmpty()) {
+            phraseIndex.rebuild(emptyList())
+            return
+        }
+        val d = dict
+        val list = ArrayList<PhraseIndex.Entry>(phrases.size)
+        for ((text, st) in phrases) {
+            list.add(PhraseIndex.Entry(text, st.pinyin, d?.initialsOf(st.pinyin, text.length), st.count, st.day))
+        }
+        phraseIndex.rebuild(list)
     }
 
     /**
@@ -879,6 +953,9 @@ class JianjiImeService : InputMethodService() {
     private fun clearComposing() {
         pinyin.setLength(0)
         englishBuf.setLength(0)
+        // 组句被打断（删光 / 收尾）：本次不学整串短语
+        sessionText.setLength(0)
+        sessionPinyin.setLength(0)
         candidates = emptyList()
         englishSuggestions = emptyList()
         candidateItems = emptyList()

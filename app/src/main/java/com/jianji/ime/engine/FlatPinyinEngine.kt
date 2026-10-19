@@ -21,6 +21,8 @@ class FlatPinyinEngine(
     private val dict: JianDict,
     private val userBoost: (String) -> Float = { 0f },
     private val fuzzyMask: () -> Int = { 0 },
+    /** 用户自造短语（学到习惯的整串）：给定输入返回可直接整段上屏的候选，见 PhraseIndex */
+    private val phraseHits: (String) -> List<Candidate> = { emptyList() },
 ) : PinyinEngine {
 
     override fun candidates(query: String, limit: Int): List<Candidate> {
@@ -37,6 +39,8 @@ class FlatPinyinEngine(
         // 模糊音（可选）：zh↔z / 前后鼻音 / n↔l 的变体再扫一遍全拼前缀，打折参与排序
         val mask = fuzzyMask()
         if (mask != 0) scanFuzzy(q, best, mask)
+        // 用户自造短语（整串重复输入学到的习惯）：整段吃满、直接参与排序（wutiaowu / wtw → 五条悟）
+        for (c in phraseHits(q)) putBest(best, c.text, c.score, c.consumed)
         // 全句组合（多词连打）：把 q 整段切成 2 个以上的词，产出「整句候选」。只有当「整段输入已被
         // 一个像样的词吃掉」时才放弃简拼段（防「晚上吗」压过「为什么」）；命中词很弱（如 nhm 的女孩们
         // freq=263）时仍然给简拼组合机会（你好吗）。整段本身就是词库里的词且不弱 → 不出整句候选

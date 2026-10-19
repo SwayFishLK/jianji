@@ -85,4 +85,51 @@ class LearningTest {
         assertEquals(5, p.size)
         assertEquals(30, p[Learning.pairKey("a", "b30")])
     }
+
+    // —————— 自造短语（v0.2） ——————
+
+    @Test
+    fun `短语表往返与坏行`() {
+        val m = HashMap<String, Learning.PhraseStat>()
+        m["五条悟"] = Learning.PhraseStat("wutiaowu", 3, 20000)
+        m["花呗"] = Learning.PhraseStat("huabei", 12, 0)
+        assertEquals(m, Learning.parsePhrases(Learning.serializePhrases(m)))
+
+        val bad = Learning.parsePhrases("五条悟\twutiaowu\t3\n缺段\n\t\t\nx\ty\t0\t1\n")
+        assertTrue("坏行全部丢弃", bad.isEmpty())
+        assertTrue("空串安全", Learning.parsePhrases(null).isEmpty())
+    }
+
+    @Test
+    fun `短语加分：单调、封顶、含新鲜度`() {
+        val day = 20000L
+        val c3 = Learning.phraseScore(3, day, day)
+        val c10 = Learning.phraseScore(10, day, day)
+        val c200 = Learning.phraseScore(200, day, day)
+        val c999 = Learning.phraseScore(999, day, day)
+        assertTrue("$c10 > $c3", c10 > c3)
+        assertTrue("$c200 > $c10", c200 > c10)
+        assertEquals("200 次封顶", c200, c999, 0.001f)
+        assertTrue("很久没用分更低", Learning.phraseScore(3, day, day + 200) < c3)
+        assertTrue("门槛次数的分要够高（压常用单字）：$c3", c3 > 12f)
+    }
+
+    @Test
+    fun `短语瘦身按次数 + 新鲜度`() {
+        val m = HashMap<String, Learning.PhraseStat>()
+        for (i in 1..50) m["词$i"] = Learning.PhraseStat("ci$i", i, 20000)
+        m["旧但常用"] = Learning.PhraseStat("jiu", 50, 10000)
+        Learning.prunePhrases(m, limit = 10)
+        assertEquals(10, m.size)
+        assertTrue(m.containsKey("旧但常用") && m.containsKey("词50"))
+        assertTrue(!m.containsKey("词1"))
+    }
+
+    @Test
+    fun `cjkOnly 只认纯汉字`() {
+        assertTrue(Learning.cjkOnly("五条悟"))
+        assertTrue(!Learning.cjkOnly("hello"))
+        assertTrue(!Learning.cjkOnly("五条悟abc"))
+        assertTrue(!Learning.cjkOnly(""))
+    }
 }

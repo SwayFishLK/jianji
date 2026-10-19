@@ -57,6 +57,16 @@ object Prefs {
     fun savePairs(context: Context, pairs: Map<String, Int>) =
         get(context).edit().putString(KEY_PAIRS, Learning.serializePairs(pairs)).apply()
 
+    // —————— v0.2：自造短语（同一串重复输入 → 整串出候选，格式见 Learning） ——————
+
+    const val KEY_PHRASES = "user_phrases"
+
+    fun loadPhrases(context: Context): HashMap<String, Learning.PhraseStat> =
+        Learning.parsePhrases(get(context).getString(KEY_PHRASES, null))
+
+    fun savePhrases(context: Context, phrases: Map<String, Learning.PhraseStat>) =
+        get(context).edit().putString(KEY_PHRASES, Learning.serializePhrases(phrases)).apply()
+
     // —————— M3：学习语言（一次一种；'en' / 'ja' / 'off'） ——————
 
     const val KEY_LEARN_LANG = "key_learn_lang"
