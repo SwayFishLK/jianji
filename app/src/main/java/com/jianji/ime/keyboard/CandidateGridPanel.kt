@@ -39,11 +39,16 @@ class CandidateGridPanel(context: Context) : View(context) {
     private val cellH = dp(56f)
     private val wordSize = dp(16f)
     private val trSize = dp(9.5f)
+    private val emojiSize = dp(22f)
 
     private val bgPaint = Paint()
     private val wordPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
         textSize = wordSize
+    }
+    private val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        textSize = emojiSize
     }
     private val trPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
@@ -96,6 +101,7 @@ class CandidateGridPanel(context: Context) : View(context) {
         bgPaint.color = ImTheme.panelBg
         wordPaint.color = ImTheme.candText
         trPaint.color = ImTheme.candTranslation
+        emojiPaint.color = ImTheme.candText
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         if (items.isEmpty()) return
         val cw = cellW()
@@ -110,6 +116,12 @@ class CandidateGridPanel(context: Context) : View(context) {
                 val cx = c * cw + cw / 2f
                 canvas.save()
                 canvas.clipRect(c * cw, top, (c + 1) * cw, top + cellH)
+                if (item.emoji) {
+                    val fm = emojiPaint.fontMetrics
+                    canvas.drawText(item.word, cx, top + cellH / 2f - (fm.ascent + fm.descent) / 2f, emojiPaint)
+                    canvas.restore()
+                    continue
+                }
                 val tr = shownTr.getOrNull(idx)
                 if (tr.isNullOrEmpty()) {
                     // 无译文也画在词线（0.70 格高）上，与有译文的候选词保持同一水平线

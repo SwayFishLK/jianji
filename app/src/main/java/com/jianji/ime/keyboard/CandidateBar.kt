@@ -22,7 +22,13 @@ import kotlin.math.abs
  */
 class CandidateBar(context: Context) : View(context) {
 
-    data class Item(val word: String, val translation: String? = null, val mark: String? = null)
+    data class Item(
+        val word: String,
+        val translation: String? = null,
+        val mark: String? = null,
+        /** v0.3：词后 emoji 候选（画大一点、居中；没有译文/角标） */
+        val emoji: Boolean = false,
+    )
 
     /** 点选回调：下标对应最近一次 setItems 的列表 */
     var onSelect: ((Int) -> Unit)? = null
@@ -53,10 +59,17 @@ class CandidateBar(context: Context) : View(context) {
     private val padH = dp(13f)
     private val wordSize = dp(18f)
     private val trSize = dp(10.5f)
+    private val emojiSize = dp(24f)
 
     private val wordPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
         textSize = wordSize
+    }
+
+    /** emoji 候选：比词面大一号、垂直居中（系统彩色 emoji 字体） */
+    private val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        textSize = emojiSize
     }
     private val trPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
@@ -108,6 +121,13 @@ class CandidateBar(context: Context) : View(context) {
         totalWidth = leaderPad + trailingPad
         for (it in items) {
             var w = maxOf(minCellW, wordPaint.measureText(it.word) + padH * 2)
+            if (it.emoji) {
+                w = maxOf(w, emojiPaint.measureText(it.word) + padH * 2)
+                shownTr.add(null)
+                widths.add(w)
+                totalWidth += w + gap
+                continue
+            }
             val tr = it.translation
             if (!tr.isNullOrEmpty()) {
                 val shown = if (trPaint.measureText(tr) > maxTrW) {
@@ -137,6 +157,7 @@ class CandidateBar(context: Context) : View(context) {
         val h = height.toFloat()
         wordPaint.color = ImTheme.candText
         trPaint.color = ImTheme.candTranslation
+        emojiPaint.color = ImTheme.candText // 彩色 emoji 用自带颜色；万一系统只有单色字形，也别画成黑色
         selFill.color = ImTheme.accentAlpha(0x29)
         selStroke.color = ImTheme.accentAlpha(0x80)
         wordPaint.textSize = wordSize
@@ -151,6 +172,12 @@ class CandidateBar(context: Context) : View(context) {
                     pillRect.set(x + pillInsetH, pillInsetV, x + w - pillInsetH, h - pillInsetV)
                     canvas.drawRoundRect(pillRect, pillRadius, pillRadius, selFill)
                     canvas.drawRoundRect(pillRect, pillRadius, pillRadius, selStroke)
+                }
+                if (item.emoji) {
+                    val fm = emojiPaint.fontMetrics
+                    canvas.drawText(item.word, cx, h / 2f - (fm.ascent + fm.descent) / 2f, emojiPaint)
+                    x += w + gap
+                    continue
                 }
                 val tr = shownTr.getOrNull(k)
                 if (tr.isNullOrEmpty()) {

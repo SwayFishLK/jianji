@@ -14,7 +14,7 @@
 项目地址：https://github.com/qingjian-team/qingjian （GPL-3.0-or-later）
 
 本应用使用其数据：基础词库（dict）、释义表（glossary-en / glossary-ja /
-glossary-zh）、英文词表（english）、表情与颜文字面板（catalog），
+glossary-zh）、英文词表（english）、表情与颜文字面板（catalog）、词→emoji 映射（emoji-map），
 经 tools/dictgen 数据管线转换为应用内二进制资产，未改动内容。
 
 青简词库的上游来源（据其 assets/lexicon/README.md 与相关说明）：

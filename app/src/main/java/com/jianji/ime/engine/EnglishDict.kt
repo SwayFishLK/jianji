@@ -17,6 +17,54 @@ class EnglishDict private constructor(
 
     val size: Int get() = wordOff.size - 1
 
+    /** 一个词 + 词频（wordfreq Zipf ×1000） */
+    data class Hit(val word: String, val freq: Int)
+
+    /**
+     * 前缀里词频最高的一个（不排序、不建列表）：中文模式的英文词提示用（见 EnglishHint）。
+     * 与 [suggest] 不同，这里只为「最可能的那一个」做一次线性扫描，2~3 个字母的高频前缀也不卡。
+     */
+    fun best(prefix: String): Hit? {
+        if (prefix.isEmpty() || size == 0) return null
+        val q = prefix.lowercase(Locale.ROOT).toByteArray(Charsets.UTF_8)
+
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (compare(word, wordOff[mid], wordOff[mid + 1], q) < 0) lo = mid + 1 else hi = mid
+        }
+
+        var best = -1
+        var bestFreq = -1
+        var i = lo
+        while (i < size) {
+            val a = wordOff[i]
+            val b = wordOff[i + 1]
+            if (b - a < q.size || compare(word, a, a + q.size, q) != 0) break
+            if (freq[i] > bestFreq) {
+                bestFreq = freq[i]
+                best = i
+            }
+            i++
+        }
+        return if (best < 0) null else Hit(wordAt(best), bestFreq)
+    }
+
+    /** 精确词的词频；词表里没有返回 -1（大写会先转小写） */
+    fun freqOf(text: String): Int {
+        if (text.isEmpty() || size == 0) return -1
+        val q = text.lowercase(Locale.ROOT).toByteArray(Charsets.UTF_8)
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (compare(word, wordOff[mid], wordOff[mid + 1], q) < 0) lo = mid + 1 else hi = mid
+        }
+        if (lo >= size) return -1
+        return if (compare(word, wordOff[lo], wordOff[lo + 1], q) == 0) freq[lo] else -1
+    }
+
     /** 前缀联想：词频降序返回最多 limit 个词；没有命中返回空表 */
     fun suggest(prefix: String, limit: Int): List<String> {
         if (prefix.isEmpty() || limit <= 0 || size == 0) return emptyList()

@@ -24,10 +24,12 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.jianji.ime.engine.Candidate
 import com.jianji.ime.engine.EmojiDict
+import com.jianji.ime.engine.EmojiMap
 import com.jianji.ime.engine.EnglishDict
 import com.jianji.ime.engine.FlatPinyinEngine
 import com.jianji.ime.engine.FuzzyVariants
 import com.jianji.ime.engine.GlossDict
+import com.jianji.ime.engine.HintPlanner
 import com.jianji.ime.engine.JianDict
 import com.jianji.ime.engine.LevelDict
 import com.jianji.ime.engine.PinyinEngine
@@ -82,6 +84,19 @@ class JianjiImeService : InputMethodService() {
     private var dict: JianDict? = null
     private val pinyin = StringBuilder()
     private var candidates: List<Candidate> = emptyList()
+
+    /**
+     * 候选栏每一格对应的动作（v0.3）：与 candidateItems 一一对应。
+     * 中文词会学习/部分上屏；英文提示与 emoji 只上屏文本，不记入中文学习。
+     */
+    private sealed interface BarAction {
+        data class Word(val c: Candidate) : BarAction
+        data class English(val text: String) : BarAction
+        data class Emoji(val text: String) : BarAction
+    }
+
+    private var barActions: List<BarAction> = emptyList()
+
     private var englishMode = false
 
     // —————— v0.2：记忆（词频 + 新鲜度 + 搭配，见 Learning） ——————
@@ -138,6 +153,8 @@ class JianjiImeService : InputMethodService() {
     private var zhGloss: GlossDict? = null
     private var englishLoading = false
     private var englishFailed = false
+    private var zhGlossLoading = false
+    private var zhGlossFailed = false
 
     // —————— M4：剪贴板 + 常用语 + 表情 ——————
 
@@ -154,6 +171,10 @@ class JianjiImeService : InputMethodService() {
     /** 表情表（emoji.bin，22KB，启动即异步载好） */
     @Volatile
     private var emojiDict: EmojiDict? = null
+
+    /** 中文词 → 一个 emoji（emoji-map.bin，95KB；与表情表一起载） */
+    @Volatile
+    private var emojiMap: EmojiMap? = null
     private var emojiLoading = false
 
     /** 系统剪贴板监听（只在系统允许时回调，抓到就进历史） */
@@ -582,7 +603,12 @@ class JianjiImeService : InputMethodService() {
             commitEnglish(index)
             return
         }
-        candidates.getOrNull(index)?.let { commitCandidate(it) }
+        when (val a = barActions.getOrNull(index)) {
+            is BarAction.Word -> commitCandidate(a.c)
+            is BarAction.English -> commitHintText(a.text)
+            is BarAction.Emoji -> commitHintText(a.text)
+            null -> {}
+        }
     }
 
     /**
@@ -606,17 +632,21 @@ class JianjiImeService : InputMethodService() {
             clearComposing()
             return
         }
-        val c = candidates.getOrNull(index) ?: return
+        val c = (barActions.getOrNull(index) as? BarAction.Word)?.c ?: return
         if (c.text.length > 4) return
         val t = gloss?.inputFormFor(c.text) ?: return
         if (t.isEmpty()) return
         commitCandidateText(c, t)
     }
 
-    /** 上屏首选词（没有候选则原样上屏拼音） */
+    /** 上屏首选（没有候选则原样上屏拼音）：中文词走学习；英文提示 / emoji 只上屏文本 */
     private fun commitPending() {
-        val top = candidates.firstOrNull()
-        if (top != null) commitCandidate(top) else commitRaw()
+        when (val a = barActions.firstOrNull()) {
+            is BarAction.Word -> commitCandidate(a.c)
+            is BarAction.English -> commitHintText(a.text)
+            is BarAction.Emoji -> commitHintText(a.text)
+            null -> commitRaw()
+        }
     }
 
     /**
@@ -671,6 +701,17 @@ class JianjiImeService : InputMethodService() {
         val text = if (index == 0) englishBuf.toString() else englishSuggestions.getOrNull(index - 1)
         if (text.isNullOrEmpty()) return
         currentInputConnection?.commitText(text, 1)
+        clearComposing()
+    }
+
+    /**
+     * 上屏中文模式里的附加候选（英文提示 / emoji）：只上屏文本，不记中文学习、不参与前词搭配，
+     * 并把组句整段收掉（英文提示可能比输入长，例如 hel → help）。
+     */
+    private fun commitHintText(text: String) {
+        if (text.isEmpty()) return
+        currentInputConnection?.commitText(text, 1)
+        lastCommitted = null
         clearComposing()
     }
 
@@ -827,18 +868,40 @@ class JianjiImeService : InputMethodService() {
             )
             for (w in englishSuggestions) list.add(CandidateBar.Item(w, zg?.annotationFor(w), englishMark(w)))
             candidates = emptyList()
+            barActions = emptyList()
             candidateItems = list
         } else {
             candidates = engine?.candidates(text, 100) ?: emptyList()
             ensureGloss()
+            // 英文词提示：词表 1.55MB，首次输入时异步载入；载好前中文候选照常出
+            if (text.length >= 2) ensureEnglishWords()
+            val plan = HintPlanner.plan(text, candidates, englishDict, emojiMap)
             val g = gloss
-            // 译文只注短候选（≤4 字，词条体量）：整句/长短语没有现成译词，不查也不占位（青简同款）
-            candidateItems = candidates.map {
-                val short = it.text.length <= 4
-                val ann = if (short) g?.annotationFor(it.text) else null
-                val mark = if (short) chineseMark(it.text, g) else null
-                CandidateBar.Item(it.text, ann, mark)
+            val items = ArrayList<CandidateBar.Item>(candidates.size + 2)
+            val actions = ArrayList<BarAction>(candidates.size + 2)
+            if (plan.english != null && plan.englishIndex == 0) {
+                items.add(CandidateBar.Item(plan.english))
+                actions.add(BarAction.English(plan.english))
             }
+            // 译文只注短候选（≤4 字，词条体量）：整句/长短语没有现成译词，不查也不占位（青简同款）
+            for ((i, c) in candidates.withIndex()) {
+                val short = c.text.length <= 4
+                val ann = if (short) g?.annotationFor(c.text) else null
+                val mark = if (short) chineseMark(c.text, g) else null
+                items.add(CandidateBar.Item(c.text, ann, mark))
+                actions.add(BarAction.Word(c))
+                // 附加候选只跟在首选词后面：emoji（首选词配一个）→ 英文提示（不抢首选时排第二）
+                if (i == 0 && plan.emoji != null) {
+                    items.add(CandidateBar.Item(plan.emoji, emoji = true))
+                    actions.add(BarAction.Emoji(plan.emoji))
+                }
+                if (i == 0 && plan.english != null && plan.englishIndex == 1) {
+                    items.add(CandidateBar.Item(plan.english))
+                    actions.add(BarAction.English(plan.english))
+                }
+            }
+            candidateItems = items
+            barActions = actions
         }
         candidateBar.setItems(candidateItems)
         if (overlay == Overlay.GRID) gridPanel.setItems(candidateItems)
@@ -908,10 +971,10 @@ class JianjiImeService : InputMethodService() {
     }
 
     /**
-     * 英文模式数据（english.bin + gloss-zh.bin，约 3.3MB）首次用英文时异步载入；
-     * 载好前候选只显示原样输入，载好后自动补联想词与中文释义。
+     * 英文词表（english.bin，1.55MB）异步载入：英文模式与中文模式的英文词提示共用。
+     * 载好前中文候选照常出；载好后若正在组句，重刷一遍补上提示。
      */
-    private fun ensureEnglish() {
+    private fun ensureEnglishWords() {
         if (englishDict != null || englishLoading || englishFailed) return
         englishLoading = true
         Thread({
@@ -920,6 +983,27 @@ class JianjiImeService : InputMethodService() {
             } catch (t: Throwable) {
                 null
             }
+            mainHandler.post {
+                englishLoading = false
+                if (d == null) {
+                    englishFailed = true
+                    return@post
+                }
+                englishDict = d
+                if (englishMode && englishBuf.isNotEmpty()) updateComposing()
+                else if (!englishMode && pinyin.isNotEmpty()) updateComposing()
+            }
+        }, "jianji-english-load").start()
+    }
+
+    /**
+     * 英文模式额外要的「英→中释义」（gloss-zh，1.7MB）与 CEFR 角标：只在英文模式载，
+     * 中文模式的英文提示不用这两张表。释义载失败不影响英文输入，只是候选上少一行小字。
+     */
+    private fun ensureZhGloss() {
+        if (zhGloss != null || zhGlossLoading || zhGlossFailed) return
+        zhGlossLoading = true
+        Thread({
             val g = try {
                 assets.open("gloss-zh.bin").use { GlossDict.load(it) }
             } catch (t: Throwable) {
@@ -932,17 +1016,18 @@ class JianjiImeService : InputMethodService() {
                 null
             }
             mainHandler.post {
-                englishLoading = false
-                if (d == null || g == null) {
-                    englishFailed = true
-                    return@post
-                }
-                englishDict = d
-                zhGloss = g
+                zhGlossLoading = false
+                if (g != null) zhGloss = g else zhGlossFailed = true
                 if (lv != null) levelsEn = lv
                 if (englishMode && englishBuf.isNotEmpty()) updateComposing()
             }
-        }, "jianji-english-load").start()
+        }, "jianji-english-gloss").start()
+    }
+
+    /** 英文模式数据（词表 + 英→中释义） */
+    private fun ensureEnglish() {
+        ensureEnglishWords()
+        ensureZhGloss()
     }
 
     /** 学习语言变更（测试页 / 未来的设置页写入 Prefs 时回调）：立即按新语言重载并重画 */
@@ -958,6 +1043,7 @@ class JianjiImeService : InputMethodService() {
         sessionText.setLength(0)
         sessionPinyin.setLength(0)
         candidates = emptyList()
+        barActions = emptyList()
         englishSuggestions = emptyList()
         candidateItems = emptyList()
         if (::candidateBar.isInitialized) candidateBar.clear()
@@ -1087,13 +1173,18 @@ class JianjiImeService : InputMethodService() {
         clipListenerAttached = true
     }
 
-    /** 表情表异步载入（22KB，载好补画） */
+    /** 表情表 + 词→emoji 映射异步载入（22KB + 95KB，载好补画） */
     private fun ensureEmoji() {
-        if (emojiDict != null || emojiLoading) return
+        if ((emojiDict != null && emojiMap != null) || emojiLoading) return
         emojiLoading = true
         Thread({
             val d = try {
                 assets.open("emoji.bin").use { EmojiDict.load(it) }
+            } catch (t: Throwable) {
+                null
+            }
+            val m = try {
+                assets.open("emoji-map.bin").use { EmojiMap.load(it) }
             } catch (t: Throwable) {
                 null
             }
@@ -1102,6 +1193,11 @@ class JianjiImeService : InputMethodService() {
                 if (d != null) {
                     emojiDict = d
                     if (::emojiPanel.isInitialized && overlay == Overlay.EMOJI) emojiPanel.setCategories(d.cats)
+                }
+                if (m != null) {
+                    emojiMap = m
+                    // 载好时正在中文组句：补上 emoji 候选
+                    if (pinyin.isNotEmpty() && !englishMode) updateComposing()
                 }
             }
         }, "jianji-emoji-load").start()
