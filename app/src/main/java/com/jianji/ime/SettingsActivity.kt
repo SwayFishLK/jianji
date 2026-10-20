@@ -225,7 +225,7 @@ class SettingsActivity : Activity() {
                 this,
                 iconRes = R.drawable.ic_doc,
                 title = "开源许可与署名",
-                subtitle = "GPL-3.0-or-later · 词库数据来自「青简」",
+                subtitle = "GPL-3.0-or-later · 词库：青简 + 白霜拼音",
                 chevron = true,
             ) {
                 navigatingToLicense = true
@@ -237,7 +237,7 @@ class SettingsActivity : Activity() {
             ImUi.note(
                 this,
                 "打字时顺带学语言的输入法：候选上方显示译词，只学英语或日语，一次一种。" +
-                    "候选字体跟随系统。",
+                    "候选字体跟随系统；词库约 37 万条（青简 + 白霜拼音）。",
             ),
             ImUi.lp(this, 10f, 14f, 14f),
         )

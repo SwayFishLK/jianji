@@ -16,6 +16,7 @@
 ## 主要特性
 
 - 26 键拼音（全拼 / 简拼），二期九宫格
+- 约 37 万词条：青简 + 白霜拼音现代词 + 热词补丁（2026-10）
 - 双行候选：译文小字在上、候选大字在下
 - 候选上划上屏译文；字母键上滑直接打数字 / 符号
 - 生词高亮、词频与搭配记忆（常用词前置、刚打过的优先）
@@ -46,5 +47,5 @@ reference/  外部参考仓库（不打包）
 
 ## 许可
 
-GPL-3.0-or-later。词库与释义数据来自青简（GPL-3.0）、CC-CEDICT、Unihan、
-THUOCL、jieba、CEFR-J、Octanove、JLPT 等，详见 `NOTICE`。
+GPL-3.0-or-later。词库与释义数据来自青简（GPL-3.0）、白霜拼音 rime-frost（GPL-3.0）、
+CC-CEDICT、Unihan、THUOCL、jieba、CEFR-J、Octanove、JLPT 等，详见 `NOTICE`。

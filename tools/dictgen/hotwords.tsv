@@ -1,0 +1,494 @@
+# 简记热词补丁表（2026-10-20）
+# 词	音节	词频；只用于补青简/白霜缺失或抬升白霜低权重的新词。
+# 拼音优先取自白霜 rime-frost 同词条（含多音字校对），白霜没有的才用 pypinyin。
+具身智能	ju shen zhi neng	5000
+低空经济	di kong jing ji	5000
+银发经济	yin fa jing ji	5000
+新质生产力	xin zhi sheng chan li	5000
+智能体	zhi neng ti	5000
+人形机器人	ren xing ji qi ren	5000
+大模型	da mo xing	5000
+多模态	duo mo tai	5000
+生成式人工智能	sheng cheng shi ren gong zhi neng	5000
+通用人工智能	tong yong ren gong zhi neng	5000
+未来产业	wei lai chan ye	3000
+算力	suan li	3000
+智算中心	zhi suan zhong xin	3000
+超算中心	chao suan zhong xin	3000
+东数西算	dong shu xi suan	3000
+全国一体化算力网	quan guo yi ti hua suan li wang	3000
+液冷	ye leng	2000
+液冷服务器	ye leng fu wu qi	2000
+先进制程	xian jin zhi cheng	2000
+光刻机	guang ke ji	2000
+国产替代	guo chan ti dai	3000
+原生鸿蒙	yuan sheng hong meng	5000
+纯血鸿蒙	chun xue hong meng	5000
+鸿蒙	hong meng	3000
+麒麟芯片	qi lin xin pian	2000
+昇腾芯片	sheng teng xin pian	2000
+算力芯片	suan li xin pian	2000
+光模块	guang mo kuai	2000
+问界	wen jie	3000
+智界	zhi jie	3000
+享界	xiang jie	3000
+尊界	zun jie	3000
+小米汽车	xiao mi qi che	3000
+比亚迪	bi ya di	3000
+宁德时代	ning de shi dai	3000
+蔚来	wei lai	3000
+小鹏	xiao peng	3000
+理想	li xiang	3000
+极氪	ji ke	3000
+零跑	ling pao	3000
+哪吒	ne zha	3000
+高合	gao he	3000
+威马	wei ma	3000
+萝卜快跑	luo bo kuai pao	3000
+无人驾驶	wu ren jia shi	3000
+自动驾驶	zi dong jia shi	3000
+智能网联	zhi neng wang lian	3000
+车路协同	che lu xie tong	3000
+飞行汽车	fei xing qi che	3000
+低空飞行器	di kong fei xing qi	3000
+机器狗	ji qi gou	3000
+四足机器人	si zu ji qi ren	3000
+文生图	wen sheng tu	3000
+文生视频	wen sheng shi pin	3000
+提示词	ti shi ci	3000
+提示词工程	ti shi ci gong cheng	3000
+开源模型	kai yuan mo xing	3000
+闭源模型	bi yuan mo xing	3000
+小模型	xiao mo xing	3000
+端侧大模型	duan ce da mo xing	2000
+多模态大模型	duo mo tai da mo xing	2000
+大模型幻觉	da mo xing huan jue	2000
+智能体平台	zhi neng ti ping tai	2000
+机器学习	ji qi xue xi	3000
+深度学习	shen du xue xi	3000
+强化学习	qiang hua xue xi	3000
+神经网络	shen jing wang luo	3000
+训练数据	xun lian shu ju	3000
+推理模型	tui li mo xing	2000
+思维链	si wei lian	2000
+微调	wei tiao	3000
+蒸馏	zheng liu	2000
+幻觉	huan jue	2000
+对齐	dui qi	3000
+数据要素	shu ju yao su	2000
+数据资产	shu ju zi chan	2000
+公共数据	gong gong shu ju	3000
+数据交易所	shu ju jiao yi suo	2000
+数据跨境	shu ju kua jing	2000
+个人信息保护	ge ren xin xi bao hu	2000
+算法推荐	suan fa tui jian	2000
+深度合成	shen du he cheng	2000
+数据中心	shu ju zhong xin	3000
+芯片	xin pian	3000
+储能	chu neng	3000
+新型储能	xin xing chu neng	2000
+固态电池	gu tai dian chi	2000
+半固态电池	ban gu tai dian chi	2000
+钠离子电池	na li zi dian chi	2000
+液流电池	ye liu dian chi	2000
+压缩空气储能	ya suo kong qi chu neng	2000
+储能电站	chu neng dian zhan	2000
+虚拟电厂	xu ni dian chang	2000
+源网荷储	yuan wang he chu	2000
+新型电力系统	xin xing dian li xi tong	2000
+氢能	qing neng	3000
+绿氢	lv qing	2000
+绿电	lv dian	2000
+氢燃料电池	qing ran liao dian chi	2000
+光伏	guang fu	3000
+风电	feng dian	3000
+特高压	te gao ya	3000
+充电桩	chong dian zhuang	3000
+换电	huan dian	3000
+换电模式	huan dian mo shi	2000
+超充	chao chong	2000
+超充站	chao chong zhan	2000
+光储充一体化	guang chu chong yi ti hua	2000
+碳中和	tan zhong he	3000
+碳达峰	tan da feng	3000
+双碳	shuang tan	5000
+双碳目标	shuang tan mu biao	3000
+碳交易	tan jiao yi	2000
+碳市场	tan shi chang	2000
+碳足迹	tan zu ji	2000
+碳关税	tan guan shui	2000
+气候变化	qi hou bian hua	3000
+极端天气	ji duan tian qi	3000
+新能源	xin neng yuan	3000
+新能源汽车	xin neng yuan qi che	5000
+数字经济	shu zi jing ji	3000
+数字乡村	shu zi xiang cun	3000
+智慧城市	zhi hui cheng shi	3000
+智慧养老	zhi hui yang lao	3000
+银发旅游	yin fa lv you	3000
+康养	kang yang	3000
+托育	tuo yu	3000
+育儿补贴	yu er bu tie	3000
+渐进式延迟退休	jian jin shi yan chi tui xiu	3000
+个人养老金	ge ren yang lao jin	3000
+医保谈判	yi bao tan pan	3000
+集采	ji cai	3000
+带量采购	dai liang cai gou	3000
+以旧换新	yi jiu huan xin	3000
+消费券	xiao fei quan	3000
+房住不炒	fang zhu bu chao	3000
+保交楼	bao jiao lou	3000
+白名单	bai ming dan	2000
+化债	hua zhai	3000
+特别国债	te bie guo zhai	3000
+全国统一大市场	quan guo tong yi da shi chang	3000
+乡村振兴	xiang cun zhen xing	3000
+共同富裕	gong tong fu yu	3000
+一带一路	yi dai yi lu	3000
+人类命运共同体	ren lei ming yun gong tong ti	3000
+稳就业	wen jiu ye	3000
+灵活就业	ling huo jiu ye	3000
+数字游民	shu zi you min	3000
+远程办公	yuan cheng ban gong	3000
+混合办公	hun he ban gong	3000
+海洋经济	hai yang jing ji	2000
+湾区经济	wan qu jing ji	2000
+平台经济	ping tai jing ji	2000
+实体经济	shi ti jing ji	2000
+新业态	xin ye tai	2000
+新模式	xin mo shi	2000
+专精特新	zhuan jing te xin	2000
+小巨人	xiao ju ren	2000
+独角兽	du jiao shou	2000
+瞪羚企业	deng ling qi ye	2000
+隐形冠军	yin xing guan jun	2000
+灯塔工厂	deng ta gong chang	2000
+黑灯工厂	hei deng gong chang	2000
+工业互联网	gong ye hu lian wang	2000
+智能制造	zhi neng zhi zao	2000
+柔性制造	rou xing zhi zao	2000
+增材制造	zeng cai zhi zao	2000
+数字孪生	shu zi luan sheng	2000
+元宇宙	yuan yu zhou	5000
+数字藏品	shu zi cang pin	2000
+虚拟人	xu ni ren	2000
+数字人	shu zi ren	2000
+量子计算	liang zi ji suan	2000
+量子科技	liang zi ke ji	2000
+脑机接口	nao ji jie kou	2000
+合成生物	he cheng sheng wu	2000
+生物制造	sheng wu zhi zao	2000
+基因编辑	ji yin bian ji	2000
+细胞治疗	xi bao zhi liao	2000
+创新药	chuang xin yao	2000
+医疗器械	yi liao qi xie	3000
+商业航天	shang ye hang tian	2000
+卫星互联网	wei xing hu lian wang	2000
+低轨卫星	di gui wei xing	2000
+可回收火箭	ke hui shou huo jian	2000
+深海科技	shen hai ke ji	2000
+可控核聚变	ke kong he ju bian	2000
+核聚变	he ju bian	2000
+城市更新	cheng shi geng xin	2000
+老旧小区改造	lao jiu xiao qu gai zao	2000
+城中村改造	cheng zhong cun gai zao	2000
+保障性住房	bao zhang xing zhu fang	2000
+平急两用	ping ji liang yong	2000
+三大工程	san da gong cheng	2000
+海绵城市	hai mian cheng shi	2000
+韧性城市	ren xing cheng shi	2000
+应急管理	ying ji guan li	2000
+地震预警	di zhen yu jing	2000
+暴雨预警	bao yu yu jing	2000
+高温预警	gao wen yu jing	2000
+搭子	da zi	5000
+显眼包	xian yan bao	5000
+情绪价值	qing xu jia zhi	5000
+松弛感	song chi gan	5000
+淄博烧烤	zi bo shao kao	5000
+特种兵旅游	te zhong bing lv you	5000
+电子榨菜	dian zi zha cai	5000
+雪糕刺客	xue gao ci ke	3000
+村超	cun chao	5000
+美拉德	mei la de	5000
+围炉煮茶	wei lu zhu cha	5000
+陆冲	lu chong	5000
+桨板	jiang ban	3000
+飞盘	fei pan	3000
+露营	lu ying	3000
+骑行	qi xing	3000
+马拉松	ma la song	3000
+越野跑	yue ye pao	3000
+徒步	tu bu	3000
+滑雪	hua xue	3000
+冲浪	chong lang	3000
+潜水	qian shui	3000
+多巴胺穿搭	duo ba an chuan da	3000
+老钱风	lao qian feng	3000
+静奢风	jing she feng	3000
+新中式	xin zhong shi	3000
+国潮	guo chao	3000
+汉服	han fu	3000
+马面裙	ma mian qun	3000
+簪花	zan hua	3000
+研学	yan xue	3000
+研学游	yan xue you	3000
+反向旅游	fan xiang lv you	3000
+县域旅游	xian yu lv you	3000
+县域经济	xian yu jing ji	3000
+首发经济	shou fa jing ji	3000
+冰雪经济	bing xue jing ji	3000
+南方小土豆	nan fang xiao tu dou	3000
+城市漫步	cheng shi man bu	3000
+泼天富贵	po tian fu gui	3000
+多巴胺	duo ba an	3000
+绝绝子	jue jue zi	3000
+摆烂	bai lan	3000
+内卷	nei juan	3000
+破防	po fang	3000
+躺平	tang ping	3000
+凡尔赛	fan er sai	3000
+打工人	da gong ren	3000
+尾款人	wei kuan ren	3000
+后浪	hou lang	3000
+逆行者	ni xing zhe	3000
+觉醒年代	jue xing nian dai	3000
+双循环	shuang xun huan	3000
+原地过年	yuan di guo nian	3000
+社死	she si	3000
+社牛	she niu	3000
+社恐	she kong	3000
+吃瓜	chi gua	3000
+塌房	ta fang	3000
+顶流	ding liu	3000
+流量	liu liang	3000
+网红	wang hong	3000
+带货	dai huo	3000
+破圈	po quan	3000
+出圈	chu quan	3000
+玩梗	wan geng	3000
+名场面	ming chang mian	3000
+电子木鱼	dian zi mu yu	3000
+电子宠物	dian zi chong wu	3000
+赛博朋克	sai bo peng ke	3000
+盲盒	mang he	3000
+谷子	gu zi	3000
+吧唧	ba ji	3000
+痛包	tong bao	3000
+二次元	er ci yuan	3000
+三次元	san ci yuan	3000
+同人	tong ren	3000
+乙女	yi nv	3000
+乙游	yi you	3000
+原神	yuan shen	3000
+崩铁	beng tie	3000
+塞尔达	sai er da	3000
+宝可梦	bao ke meng	3000
+五条悟	wu tiao wu	3000
+咒术回战	zhou shu hui zhan	3000
+鬼灭之刃	gui mie zhi ren	3000
+间谍过家家	jian die guo jia jia	3000
+葬送的芙莉莲	zang song de fu li lian	3000
+排球少年	pai qiu shao nian	3000
+蓝色监狱	lan se jian yu	3000
+时光代理人	shi guang dai li ren	3000
+黑神话悟空	hei shen hua wu kong	5000
+摸鱼	mo yu	3000
+社畜	she chu	3000
+牛马	niu ma	3000
+班味	ban wei	3000
+向上管理	xiang shang guan li	3000
+画饼	hua bing	3000
+背锅	bei guo	3000
+甩锅	shuai guo	3000
+复盘	fu pan	3000
+闭环	bi huan	3000
+抓手	zhua shou	3000
+赋能	fu neng	3000
+颗粒度	ke li du	3000
+方法论	fang fa lun	3000
+底层逻辑	di ceng luo ji	3000
+顶层设计	ding ceng she ji	3000
+降本增效	jiang ben zeng xiao	3000
+大厂	da chang	3000
+副业	fu ye	3000
+斜杠青年	xie gang qing nian	3000
+上岸	shang an	3000
+考研	kao yan	3000
+考公	kao gong	3000
+考编	kao bian	3000
+秋招	qiu zhao	3000
+春招	chun zhao	3000
+实习	shi xi	3000
+简历	jian li	3000
+面试	mian shi	3000
+裁员	cai yuan	3000
+毕业	bi ye	3000
+广进计划	guang jin ji hua	3000
+细思极恐	xi si ji kong	3000
+不明觉厉	bu ming jue li	3000
+十动然拒	shi dong ran ju	3000
+人艰不拆	ren jian bu chai	3000
+喜大普奔	xi da pu ben	3000
+男默女泪	nan mo nv lei	3000
+累觉不爱	lei jue bu ai	3000
+火钳刘明	huo qian liu ming	3000
+我伙呆	wo huo dai	3000
+何弃疗	he qi liao	3000
+城会玩	cheng hui wan	3000
+图样图森破	tu yang tu sen po	3000
+扎心了老铁	zha xin le lao tie	3000
+皮皮虾	pi pi xia	3000
+佛系	fo xi	3000
+锦鲤	jin li	3000
+杠精	gang jing	3000
+柠檬精	ning meng jing	3000
+真香	zhen xiang	3000
+打脸	da lian	3000
+官宣	guan xuan	3000
+撒狗粮	sa gou liang	3000
+单身狗	dan shen gou	3000
+尴尬癌	gan ga ai	3000
+强迫症	qiang po zheng	3000
+拖延症	tuo yan zheng	3000
+选择困难症	xuan ze kun nan zheng	3000
+巨婴	ju ying	3000
+键盘侠	jian pan xia	3000
+网络喷子	wang luo pen zi	3000
+水军	shui jun	3000
+营销号	ying xiao hao	3000
+标题党	biao ti dang	3000
+流量密码	liu liang mi ma	3000
+热搜	re sou	3000
+超话	chao hua	3000
+打榜	da bang	3000
+应援	ying yuan	3000
+饭圈	fan quan	3000
+私生饭	si sheng fan	3000
+站姐	zhan jie	3000
+代拍	dai pai	3000
+黄牛	huang niu	3000
+票务	piao wu	3000
+种草	zhong cao	3000
+拔草	ba cao	3000
+测评	ce ping	3000
+开箱	kai xiang	3000
+好物	hao wu	3000
+氛围感	fen wei gan	3000
+沉浸式	chen jin shi	3000
+直播带货	zhi bo dai huo	3000
+短视频	duan shi pin	3000
+中视频	zhong shi pin	3000
+长新冠	chang xin guan	3000
+甲流	jia liu	3000
+支原体	zhi yuan ti	3000
+二阳	er yang	3000
+三阳	san yang	3000
+抗原	kang yuan	3000
+加强针	jia qiang zhen	3000
+布洛芬	bu luo fen	3000
+蒙脱石散	meng tuo shi san	3000
+奥司他韦	ao si ta wei	3000
+司美格鲁肽	si mei ge lu tai	3000
+减重	jian zhong	3000
+多囊	duo nang	3000
+胰岛素抵抗	yi dao su di kang	3000
+抑郁症	yi yu zheng	3000
+焦虑症	jiao lv zheng	3000
+孤独症	gu du zheng	3000
+方舱	fang cang	3000
+健康码	jian kang ma	3000
+核酸	he suan	3000
+双减	shuang jian	3000
+课后服务	ke hou fu wu	3000
+教师轮岗	jiao shi lun gang	3000
+普职分流	pu zhi fen liu	3000
+强基计划	qiang ji ji hua	3000
+新高考	xin gao kao	3000
+志愿填报	zhi yuan tian bao	3000
+帮信罪	bang xin zui	3000
+电信诈骗	dian xin zha pian	3000
+反诈	fan zha	3000
+断卡	duan ka	3000
+洗钱	xi qian	3000
+虚拟货币	xu ni huo bi	3000
+数字人民币	shu zi ren min bi	3000
+降息	jiang xi	3000
+降准	jiang zhun	3000
+存量房贷	cun liang fang dai	3000
+提前还贷	ti qian huan dai	3000
+理财	li cai	3000
+基金	ji jin	3000
+北交所	bei jiao suo	3000
+科创板	ke chuang ban	3000
+注册制	zhu ce zhi	3000
+退市	tui shi	3000
+减持	jian chi	3000
+微信	wei xin	3000
+抖音	dou yin	3000
+小红书	xiao hong shu	3000
+快手	kuai shou	3000
+视频号	shi pin hao	3000
+公众号	gong zhong hao	3000
+小程序	xiao cheng xu	3000
+直播间	zhi bo jian	3000
+拼多多	pin duo duo	3000
+淘宝	tao bao	3000
+京东	jing dong	3000
+美团	mei tuan	3000
+饿了么	e le me	3000
+滴滴	di di	3000
+高德	gao de	3000
+百度地图	bai du di tu	3000
+华为	hua wei	3000
+小米	xiao mi	3000
+苹果	ping guo	3000
+三星	san xing	3000
+荣耀	rong yao	3000
+一加	yi jia	3000
+真我	zhen wo	3000
+红米	hong mi	3000
+麒麟	qi lin	3000
+昇腾	sheng teng	3000
+鲲鹏	kun peng	3000
+盘古	pan gu	3000
+通义千问	tong yi qian wen	3000
+文心一言	wen xin yi yan	3000
+豆包	dou bao	3000
+智谱	zhi pu	3000
+百川	bai chuan	3000
+月之暗面	yue zhi an mian	3000
+零一万物	ling yi wan wu	3000
+商汤	shang tang	3000
+科大讯飞	ke da xun fei	3000
+寒武纪	han wu ji	3000
+地平线	di ping xian	3000
+大疆	da jiang	3000
+影石	ying shi	3000
+石头科技	shi tou ke ji	3000
+追觅	zhui mi	3000
+科沃斯	ke wo si	3000
+云鲸	yun jing	3000
+添可	tian ke	3000
+戴森	dai sen	3000
+共享单车	gong xiang dan che	5000
+预制菜	yu zhi cai	5000
+网约车	wang yue che	5000
+弹窗	tan chuang	3000
+数智化	shu zhi hua	5000
+人工智能	ren gong zhi neng	5000
+大语言模型	da yu yan mo xing	5000
+语言模型	yu yan mo xing	3000
+无人机	wu ren ji	3000
+无人配送	wu ren pei song	2000
+无人配送车	wu ren pei song che	2000
+智能网联汽车	zhi neng wang lian qi che	5000
+车路云一体化	che lu yun yi ti hua	2000
+战略新兴产业	zhan lve xin xing chan ye	3000
+战略性新兴产业	zhan lve xing xin xing chan ye	3000
+卫星通信	wei xing tong xin	2000
+折叠屏	zhe die ping	2000
+屏下摄像头	ping xia she xiang tou	2000
+星闪	xing shan	2000
+数据安全	shu ju an quan	2000
+网络安全	wang luo an quan	2000

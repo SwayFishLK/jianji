@@ -3,8 +3,10 @@
 > 这是给「未来的自己」看的项目状态快照：即使对话记忆被压缩或丢失，
 > 打开这个文件就能接上进度。**每完成一个里程碑或重要步骤后更新它。**
 >
-> **最新（2026-10-20）**：**v0.3「英文提示 + emoji」0.3.0 已上真机** —— 中文模式最多 1 个英文词提示、
-> 首选词配 1 个 emoji；57 项 JVM 单测 + 模拟器自检通过，待真机手感验收。
+> **最新（2026-10-20）**：**v0.4「37 万词条」词库扩充 0.4.0 已上真机并获用户验收** —— 并入白霜拼音
+> （rime-frost，GPL-3.0）现代词 + 491 条热词补丁，词条 13.3 万 → 37.1 万，dict.bin 4.48MB → 14.86MB，
+> APK 12.48MB；60 项 JVM 单测全绿（新增 DictCoverageTest），老词排序保持，
+> `五条悟/搭子/具身智能/淄博烧烤/黑神话悟空` 等全拼首选。v0.3「英文提示 + emoji」0.3.0 已获用户验收。
 >
 > v0.2 快照：2026-10-19（**v0.2「手感与记忆」0.2.0 已上真机**：震动三档 / 候选上划译文 / 记忆与搭配 / 模糊音 /
 > 上滑数字 / 地球键 / 空格滑光标 / 生词角标 —— 代码与 33 项 JVM 单测通过，模拟器全项自检通过；
@@ -16,7 +18,51 @@
 > **2026-10-20 用户真机验收通过**（含「`wuw` 跳音节不命中」这条边界），main 已推送、GitHub Release `v0.2.0` 已发布。
 > 0.1.5 的 ZUI 强停根因见 M5.1g，用户暂缓；`.dev-env` 保留 —— 用户明确：必须等他说清才清）
 
-### v0.3「英文提示 + emoji」实现（2026-10-20，模拟器全项自检通过，待真机手感验收）
+### v0.4「37 万词条」词库扩充（2026-10-20，0.4.0 模拟器自检通过，待真机）
+- **用户需求**：流行语/新名词缺失（`五条悟` 等）；选「更全」方案、APK 不设限；个人词库这版先不做；
+  接受白霜拼音 GPL-3.0 署名及其上游腾讯衍生数据。
+- **词源**：白霜拼音 rime-frost（https://github.com/gaboolic/rime-frost ，GPL-3.0），固定 commit
+  `c34bbd820db0a2887aa3f75f4b67d85a01b6a0e1`（2026-10-20）。用 base / ext / exthot /
+  industry_product / game / sport / place / name2 八个文件；`tencent.dict.yaml` 不用。
+- **筛选（方案 A）**：base/ext 2~5 字权重 ≥20、6 字 ≥50；exthot / industry 全收；game ≥50；
+  sport/place/name2 ≥100；只收纯汉字、音节数 = 字数；`lue/nue` 归一为 `lve/nve`。
+- **词频**：青简原词条与原词频保留；仅青简词频 <1000 的现代词允许热词抬升（63 条，如
+  `大模型` 9 → 5000），高频老词不动。白霜新词直接用权重；0 权重 exthot 给 2000、industry 给 1500；
+  热词分 2000/3000/5000 三档。
+- **热词补丁** `tools/dictgen/hotwords.tsv`：491 条；拼音优先取白霜同词条（338 条；修正
+  `微调 wei tiao`、`弹窗 tan chuang`），白霜没有的 153 条用 pypinyin。合并时补 176 条、抬频 252 条、
+  跳过 63 条（青简高频词不动）。
+- **管线**：`tools/dictgen/MergeDict.java` 读青简 dict.tsv + 白霜扁平目录 + hotwords.tsv，输出合并 TSV；
+  再交给 `DictGen.java` 编译。白霜文件需复制成扁平目录的 8 个固定文件名（见 MergeDict 注释）。
+- **结果**：**370,583 条**（青简 132,821 + base 154,353 + ext 76,878 + exthot 2,030 +
+  industry 2,635 + game 1,193 + sport 170 + place 11 + name 64 + hot 428）；
+  字数分布 1 字 48,403 / 2 字 106,785 / 3 字 96,714 / 4 字 96,457 / 5 字 18,600 / 6 字 3,486 /
+  7 字 107 / 8 字 31；`dict.bin` **14,855,175 B**（原 4,476,000 B），414 个音节，最大词长 8。
+- **抽查**：`wutiaowu` → 五条悟 3000 首选；`dazi` → 搭子 5000 首选；`jushenzhineng` → 具身智能 5000；
+  `neijuan` → 内卷 4595；`bailan` → 摆烂 3000；`pofang` → 破防 3000；`ziboshaokao` → 淄博烧烤 5000；
+  `gongxiangdanche` → 共享单车 5000；`heishenhuawukong` → 黑神话悟空 5000；`damoxing` → 大模型 5000。
+  老词 `你好 / 中国 / 开心 / 世界 / 人民 / 喜欢` 词频与首位不变；`hello` 仍无中文、`you` 仍中文强命中。
+- **构建**：0.4.0（versionCode 9）Release APK **12,476,993 B**；`aapt2` 校验 versionName=0.4.0，
+  dict.bin 在 APK 内压缩后 6,803,641 B。
+- **测试**：60 项 JVM 单测全绿；新增 `DictCoverageTest`（35 万条门槛 + 48 个新旧词 + 热词词频 +
+  干净学习状态下 11 个新词全拼首选）；`PhraseCandidateTest` 改用词库确认不存在的「测试词 / ceshici」，
+  避免 `五条悟` 入库后把「只靠学习才出」的测试意图破坏。
+- **模拟器自检（emulator-5554，0.4.0 覆盖安装 + 默认输入法）**：
+  - 清空 App 数据后 `wutiaowu` 首选 **五条悟**（3000）；`dazi` 搭子、`jushenzhineng` 具身智能、
+    `neijuan` 内卷、`bailan` 摆烂、`pofang` 破防、`damoxing` 大模型、`ziboshaokao` 淄博烧烤、
+    `gongxiangdanche` 共享单车、`heishenhuawukong` 黑神话悟空均首选；老词
+    `nihao / zhongguo / shijie / renmin / xihuan / shangpin` 首选与 v0.3 一致，emoji/英文提示正常；
+    `hello` 英文词第一、`you` 中文「有」第一。
+  - 设置页显示 0.4.0；关于页副标题「GPL-3.0-or-later · 词库：青简 + 白霜拼音」；开源许可页能看到
+    NOTICE 里的白霜段落；logcat 无 FATAL / AndroidRuntime。
+  - **注意**：模拟器第一次看到 `五跳舞` 第一，是 v0.3 自检残留在 App 里的**已学习短语**（用户选择
+    过的整串优先于词库）；`pm clear` 后干净状态即 `五条悟` 第一。真机若用户自己学过则保留其习惯。
+- **真机**：Lenovo L71091 已覆盖安装 0.4.0（versionCode 9，保留数据），默认输入法仍为简记；
+  未注入按键，**用户已验收（2026-10-20）**。
+- **待办**：提交并推送 → 发布 v0.4.0 / 交付 APK。
+  另：v0.3.0 的 GitHub Release 与交付副本尚未发布。
+
+### v0.3「英文提示 + emoji」实现（2026-10-20，用户已验收）
 - **用户需求**：中文模式输入明显像英文时，候选栏最多出现 1 个最可能的英文词；
   输入中文词（如「开心」）时候选栏出现 1 个相关 emoji，不要多。
 - **英文词提示**（`engine/EnglishHint.kt` + `EnglishDict.best/freqOf`）：
@@ -773,9 +819,13 @@ M2.6 已定的部分上屏语义保留（整句候选 consumed = 全输入，空
 gradle :app:assembleDebug                           # 构建 Debug APK（增量约几秒~1 分钟）
 gradle :app:assembleRelease                         # Release（签名配置 M5 再做）
 adb install -r app\build\outputs\apk\debug\app-debug.apk --no-streaming   # 安装到手机（流式安装偶发失败，加 --no-streaming）
-# M2 词库管线（改了词库数据才需要重跑；输出 4.47MB 直接进 assets）
-java tools\dictgen\DictGen.java reference\qingjian-repo\assets\lexicon\dict.tsv app\src\main\assets\dict.bin
+# v0.4 词库合并管线（改了词源/热词表才需要重跑；输出约 14.86MB 直接进 assets）
+#   先把白霜 rime-frost 的 8 个词库复制成扁平目录的固定文件名（见 MergeDict.java 顶部注释）
+java tools\dictgen\MergeDict.java reference\qingjian-repo\assets\lexicon\dict.tsv C:\path\to\rime-flat tools\dictgen\hotwords.tsv C:\path\to\merged.tsv
+java tools\dictgen\DictGen.java C:\path\to\merged.tsv app\src\main\assets\dict.bin
 java tools\dictgen\DictGen.java --lookup app\src\main\assets\dict.bin nihao   # 命令行抽查候选
+# 只用青简旧词库（v0.3 及以前）：
+# java tools\dictgen\DictGen.java reference\qingjian-repo\assets\lexicon\dict.tsv app\src\main\assets\dict.bin
 # M3 释义表管线（改了 glossary 才需要重跑；输出 gloss-en.bin 3.48MB + gloss-ja.bin 4.90MB）
 java tools\dictgen\GlossGen.java reference\qingjian-repo\assets\glossary\glossary-en.tsv app\src\main\assets\gloss-en.bin app\src\main\assets\dict.bin
 java tools\dictgen\GlossGen.java reference\qingjian-repo\assets\glossary\glossary-ja.tsv app\src\main\assets\gloss-ja.bin app\src\main\assets\dict.bin
@@ -838,11 +888,13 @@ java tools\dictgen\GlossGen.java reference\qingjian-repo\assets\glossary\glossar
 - `app/src/main/java/com/jianji/ime/keyboard/`（KeyDef / KeyboardLayouts / KeyboardView / HideKeyboardButton / **ToolButton** /
   CandidateBar / CandidateGridPanel / **ClipboardPanel** / **EmojiPanel**）
 - `app/src/main/java/com/jianji/ime/engine/`（**JianDict / PinyinEngine / FlatPinyinEngine / GlossDict / EnglishDict / EmojiDict**）
-- `app/src/main/assets/dict.bin`（M2 词库 4.47MB，由 tools 生成，不入 git 也可——生成物）；
+- `app/src/main/assets/dict.bin`（v0.4 词库 14.86MB / 370,583 条，由 tools 生成，不入 git 也可——生成物）；
   `gloss-en.bin` / `gloss-ja.bin`（M3 释义表 3.48MB / 4.90MB，同上）；
   `english.bin` / `gloss-zh.bin`（M3.5 英文词表 1.55MB / 英→中释义 1.72MB，同上）；
   `emoji.bin`（M4 表情 22KB，同上）；`legal/`（M5 署名与许可全文）
 - `tools/dictgen/DictGen.java`（词库数据管线：tsv → dict.bin + --lookup 抽查）；
+  `tools/dictgen/MergeDict.java`（v0.4：青简 + 白霜拼音 + 热词补丁 → 合并 tsv）、
+  `tools/dictgen/hotwords.tsv`（v0.4：491 条热词补丁）；
   `tools/dictgen/GlossGen.java`（释义表管线：glossary-*.tsv → gloss-*.bin，M3）；
   `tools/dictgen/EnglishGen.java`（英文词表管线：english.tsv → english.bin + 前缀抽查，M3.5）；
   `tools/dictgen/EmojiGen.java`（表情管线：panel/catalog.tsv → emoji.bin，M4）；

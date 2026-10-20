@@ -2,7 +2,7 @@
 ================================================
 
 简记在输入与候选过程中显示词条对应的英语 / 日语译词，词库、释义与面板数据来自
-「青简」开源项目。为尊重数据来源，署名如下。
+「青简」与「白霜拼音」开源项目。为尊重数据来源，署名如下。
 
 本应用以 GNU General Public License 3.0 或其后续版本（GPL-3.0-or-later）发布，
 完整许可全文见本页末尾。
@@ -34,7 +34,24 @@ glossary-zh）、英文词表（english）、表情与颜文字面板（catalog�
 候选字体与界面文字跟随系统字体，未随发布包分发第三方字体。
 
 
-二、开源软件组件
+二、词库扩充（「白霜拼音」rime-frost）
+------------------------------------------------
+
+项目地址：https://github.com/gaboolic/rime-frost （GPL-3.0）
+
+v0.4 起，本应用并入其现代汉语词库（base / ext / exthot / industry_product /
+game / sport / place / name2），固定 commit c34bbd820db0a2887aa3f75f4b67d85a01b6a0e1
+（2026-10-20），经 tools/dictgen/MergeDict.java 按字数与权重筛选、与青简词库合并后
+转换为应用内 dict.bin；白霜词频直接作为新词词频使用。
+
+白霜拼音的上游包含腾讯词库等衍生数据，均按 GPL-3.0 分发；具体版权、来源与许可见
+其仓库 README / NOTICE。另有一份本应用整理的热词补丁表（tools/dictgen/hotwords.tsv），
+仅补白霜/青简缺失的现代词，拼音优先取白霜同词条、缺失时用 pypinyin 生成。
+
+本应用源码（含上述数据管线）以 GPL-3.0-or-later 发布，满足 GPL 的源码提供要求。
+
+
+三、开源软件组件
 ------------------------------------------------
 
 · androidx.core:core-ktx — Apache License 2.0
