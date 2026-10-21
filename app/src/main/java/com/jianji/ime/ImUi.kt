@@ -242,6 +242,7 @@ object ImUi {
         checked: BooleanArray,
         multi: Boolean,
         note: String? = null,
+        swatches: List<Int?>? = null,
         onPick: ((Int) -> Unit)? = null,
         onConfirm: ((BooleanArray) -> Unit)? = null,
     ): android.app.Dialog {
@@ -282,12 +283,28 @@ object ImUi {
                 setPadding(dp(a, 16f), dp(a, 13f), dp(a, 14f), dp(a, 13f))
                 isClickable = true
             }
+            // 可选：选项前的主题色圆点（皮肤选择用）
+            swatches?.getOrNull(idx)?.let { accent ->
+                row.addView(
+                    View(a).apply {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(accent)
+                            setStroke(dp(a, 1f), 0x55FFFFFF)
+                        }
+                    },
+                    LinearLayout.LayoutParams(dp(a, 14f), dp(a, 14f)).apply {
+                        rightMargin = dp(a, 10f)
+                    },
+                )
+            }
+            val label = TextView(a).apply {
+                text = options[idx]
+                textSize = 14.5f
+                maxLines = 3
+            }
             row.addView(
-                TextView(a).apply {
-                    text = options[idx]
-                    textSize = 14.5f
-                    maxLines = 3
-                },
+                label,
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
             )
             val badge = LinearLayout(a).apply { gravity = Gravity.CENTER }
@@ -306,7 +323,7 @@ object ImUi {
             val render = {
                 val on = checked[idx]
                 row.background = optionBg(a, on)
-                (row.getChildAt(0) as TextView).setTextColor(if (on) TEXT else CARD_TEXT2)
+                label.setTextColor(if (on) TEXT else CARD_TEXT2)
                 badge.background = badgeBg(a, on, multi)
                 badge.removeAllViews()
                 if (on) {

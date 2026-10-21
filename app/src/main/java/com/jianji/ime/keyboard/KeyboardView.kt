@@ -2,9 +2,11 @@ package com.jianji.ime.keyboard
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
@@ -66,11 +68,15 @@ class KeyboardView @JvmOverloads constructor(
             }
         }
 
-    /** 英文模式（中/英键状态；仅影响绘制高亮） */
+    /** 英文模式：影响中/英键高亮，并切换字母页底排标点（`，`/`。` ↔ `,`/`.`） */
     var langEnglish: Boolean = false
         set(value) {
             if (field != value) {
+                val onLetterPage = layout === KeyboardLayouts.qwerty ||
+                    layout === KeyboardLayouts.qwertyEnglish
                 field = value
+                // 只在字母页立即换布局；数字/符号/面板页返回字母页时再按新语言选择
+                if (onLetterPage) layout = letterLayout()
                 invalidate()
             }
         }
@@ -106,8 +112,11 @@ class KeyboardView @JvmOverloads constructor(
 
     fun showLetterPage() {
         symbolPageIndex = 0
-        layout = KeyboardLayouts.qwerty
+        layout = letterLayout()
     }
+
+    private fun letterLayout(): KeyboardLayout =
+        if (langEnglish) KeyboardLayouts.qwertyEnglish else KeyboardLayouts.qwerty
 
     fun showNumberPage() {
         layout = KeyboardLayouts.numbers
@@ -176,11 +185,28 @@ class KeyboardView @JvmOverloads constructor(
     /** 实心图标（⇧ 锁定、回车小鱼）用；用完记得把 style 还原成 FILL */
     private val iconFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-    private val colorKeyBg get() = ImTheme.keyBg
-    private val colorKeyPressed get() = ImTheme.keyPressed
-    private val colorFnBg get() = ImTheme.keyFnBg
+    /** 液态玻璃键面：渐变填充 + 细描边 + 顶部高光 + 回车外发光 */
+    private val keyFillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val keyBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1f)
+    }
+    private val keyHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1f)
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val keyGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val localRect = RectF()
+    private val glowRect = RectF()
+
+    private var shaderNormal: Shader? = null
+    private var shaderNormalPressed: Shader? = null
+    private var shaderFn: Shader? = null
+    private var shaderAccent: Shader? = null
+    private var shaderAccentPressed: Shader? = null
+
     private val colorAccent get() = ImTheme.accent
-    private val colorAccentPressed get() = ImTheme.accentPressed
     private val colorKeyText get() = ImTheme.keyText
     private val colorFnText get() = ImTheme.keyFnText
     private val colorHintText get() = ImTheme.keyHintText
@@ -260,6 +286,12 @@ class KeyboardView @JvmOverloads constructor(
         rebuild()
     }
 
+    /** 主题切换后重建键面渐变并重绘（不重建输入法窗口）。 */
+    fun refreshTheme() {
+        rebuild()
+        invalidate()
+    }
+
     /** 依据当前宽度重算所有键的矩形与标签栏位置 */
     private fun rebuild() {
         val w = width.toFloat()
@@ -290,7 +322,27 @@ class KeyboardView @JvmOverloads constructor(
         } else {
             -1f
         }
+        buildKeyShaders()
     }
+
+    /**
+     * 渐变坐标从 0 到键高；绘制时把 canvas 平移到每个键的左上角，
+     * 这样一套 shader 可以复用给所有同高键，避免逐帧 new LinearGradient。
+     */
+    private fun buildKeyShaders() {
+        val h = dp(layout.keyHeight)
+        shaderNormal = verticalShader(ImTheme.keyTop, ImTheme.keyBottom, h)
+        shaderNormalPressed = verticalShader(ImTheme.keyPressedTop, ImTheme.keyPressedBottom, h)
+        shaderFn = verticalShader(ImTheme.keyFnTop, ImTheme.keyFnBottom, h)
+        shaderAccent = verticalShader(ImTheme.accentTop, ImTheme.accentBottom, h)
+        shaderAccentPressed = verticalShader(ImTheme.accentPressedTop, ImTheme.accentPressedBottom, h)
+    }
+
+    private fun verticalShader(top: Int, bottom: Int, h: Float): Shader =
+        LinearGradient(
+            0f, 0f, 0f, h.coerceAtLeast(1f),
+            intArrayOf(top, bottom), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP,
+        )
 
     /** 命中判定：最近键，距离不超过容差（键缝也能按到） */
     private fun keyAt(x: Float, y: Float): PlacedKey? {
@@ -334,27 +386,60 @@ class KeyboardView @JvmOverloads constructor(
                 val isPressed = pk in pressedKeys
                 val isShiftActive = def.action == KeyAction.SHIFT && shiftState != ShiftState.OFF
 
-                fillPaint.color = when {
-                    def.style == KeyStyle.ACCENT ->
-                        if (isPressed) colorAccentPressed else colorAccent
-
-                    isPressed -> colorKeyPressed
-                    def.action == KeyAction.SHIFT && shiftState == ShiftState.LOCK -> colorKeyPressed
-                    def.style == KeyStyle.FN -> colorFnBg
-                    else -> colorKeyBg
-                }
-                canvas.drawRoundRect(pk.rect, keyRadius, keyRadius, fillPaint)
-
+                drawKeyBackground(canvas, pk, isPressed)
                 if (def.style != KeyStyle.SPACE) {
-                    drawKeyContent(canvas, pk, isPressed, isShiftActive)
+                    drawKeyContent(canvas, pk, isShiftActive)
                 }
             }
         }
         drawSymbolTabs(canvas)
     }
 
+    /** 键面：主题色半透明渐变 + 细亮边 + 顶部镜面高光；回车再叠外发光。 */
+    private fun drawKeyBackground(canvas: Canvas, pk: PlacedKey, isPressed: Boolean) {
+        val w = pk.rect.width()
+        val h = pk.rect.height()
+        if (w <= 0f || h <= 0f) return
+
+        val accent = pk.def.style == KeyStyle.ACCENT
+        val shiftLocked = pk.def.action == KeyAction.SHIFT && shiftState == ShiftState.LOCK
+
+        canvas.save()
+        canvas.translate(pk.rect.left, pk.rect.top)
+
+        if (accent) {
+            glowRect.set(-dp(2f), -dp(1f), w + dp(2f), h + dp(1f))
+            keyGlowPaint.color = ImTheme.accentGlow
+            canvas.drawRoundRect(
+                glowRect, keyRadius + dp(2f), keyRadius + dp(2f), keyGlowPaint,
+            )
+        }
+
+        localRect.set(0f, 0f, w, h)
+        keyFillPaint.shader = when {
+            accent -> if (isPressed) shaderAccentPressed else shaderAccent
+            isPressed || shiftLocked -> shaderNormalPressed
+            pk.def.style == KeyStyle.FN -> shaderFn
+            else -> shaderNormal
+        }
+        canvas.drawRoundRect(localRect, keyRadius, keyRadius, keyFillPaint)
+        keyFillPaint.shader = null
+
+        keyBorderPaint.color = if (accent) ImTheme.accentBorder else ImTheme.keyBorder
+        localRect.inset(dp(0.5f), dp(0.5f))
+        canvas.drawRoundRect(
+            localRect, keyRadius - dp(0.5f), keyRadius - dp(0.5f), keyBorderPaint,
+        )
+
+        keyHighlightPaint.color = if (accent) ImTheme.accentBorder else ImTheme.keyHighlight
+        canvas.drawLine(keyRadius, dp(1f), w - keyRadius, dp(1f), keyHighlightPaint)
+
+        canvas.restore()
+    }
+
     /** 键面内容（字母/功能字/图标/中英/⇧）：在键帽已绘制之后调用 */
-    private fun drawKeyContent(canvas: Canvas, pk: PlacedKey, isPressed: Boolean, isShiftActive: Boolean) {        val def = pk.def
+    private fun drawKeyContent(canvas: Canvas, pk: PlacedKey, isShiftActive: Boolean) {
+        val def = pk.def
         val sizeLetter = dp(18f)
         val sizeGlyph = dp(17f)
         val sizeFn = dp(14f)
@@ -367,7 +452,7 @@ class KeyboardView @JvmOverloads constructor(
         }
 
         if (def.icon != KeyIcon.NONE) {
-            drawIcon(canvas, def.icon, pk.rect, labelColor, isPressed)
+            drawIcon(canvas, def.icon, pk.rect, labelColor)
             return
         }
 
@@ -471,14 +556,14 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     /** 自绘矢量图标（比字体符号更大更统一） */
-    private fun drawIcon(canvas: Canvas, icon: KeyIcon, rect: RectF, color: Int, pressed: Boolean) {
+    private fun drawIcon(canvas: Canvas, icon: KeyIcon, rect: RectF, color: Int) {
         iconStroke.color = color
         val cx = rect.centerX()
         val cy = rect.centerY()
 
         when (icon) {
             KeyIcon.ENTER -> {
-                // 白色小鱼（回车，鱼头朝左）：整体涂白，眼睛挖空成键底色
+                // 白色小鱼（回车，鱼头朝左）：整体涂白，眼睛压深色半透明圆点
                 val s = dp(1f)
                 iconFill.style = Paint.Style.FILL_AND_STROKE
                 iconFill.strokeWidth = dp(1.2f)
@@ -506,7 +591,8 @@ class KeyboardView @JvmOverloads constructor(
                 }
                 canvas.drawPath(fish, iconFill)
                 iconFill.style = Paint.Style.FILL
-                iconFill.color = if (pressed) colorAccentPressed else colorAccent
+                // 深色半透明眼睛：回车键已经改成深主题色，不再用 accent 挖空（会看不见）
+                iconFill.color = ImTheme.enterEye
                 canvas.drawCircle(cx - 4.4f * s, cy - 1.5f * s, dp(1.2f), iconFill)
                 iconFill.color = color
             }

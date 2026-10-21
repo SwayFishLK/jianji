@@ -84,4 +84,15 @@ class ClipboardStoreTest {
         assertFalse(ClipboardStore.shouldSkip("老内容", true, "老内容"))
         assertFalse(ClipboardStore.shouldSkip("新内容", true, null))
     }
+
+    @Test
+    fun displayTextFlattensAndTruncates() {
+        assertEquals("line1 line2 line4", ClipboardStore.displayText("line1\nline2\n\nline4", maxChars = 32))
+        assertEquals("a b c", ClipboardStore.displayText("  a\t b\r\nc  ", maxChars = 32))
+        assertEquals("1234567890123456…", ClipboardStore.displayText("12345678901234567"))
+        // 短内容不截断
+        assertEquals("你好", ClipboardStore.displayText("你好"))
+        // 只影响显示，实际原文仍由 pending 保存
+        assertEquals("", ClipboardStore.displayText("   \n\t "))
+    }
 }

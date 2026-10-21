@@ -30,6 +30,9 @@ object ClipboardStore {
     /** 删除/清空后跳过的那条系统剪贴板内容（持久化，重启依然有效） */
     private const val KEY_SKIP = "clip_skip"
 
+    /** 待候选栏一次性展示的剪贴板内容（复制后留到下次唤起键盘） */
+    private const val KEY_PENDING = "clip_pending"
+
     // —————— 纯逻辑（JVM 测试台用） ——————
 
     /** 每项 Base64（UTF-8），一行一条 */
@@ -37,6 +40,28 @@ object ClipboardStore {
         items.joinToString("\n") {
             Base64.getEncoder().encodeToString(it.toByteArray(StandardCharsets.UTF_8))
         }
+
+    /**
+     * 候选栏展示剪贴板时压成一行：换行/制表折成空格、连续空白合并，过长加省略号。
+     * 实际点选仍用完整原文，这里只影响显示。
+     */
+    fun displayText(text: String, maxChars: Int = 16): String {
+        val limit = maxChars.coerceAtLeast(1)
+        val sb = StringBuilder()
+        var prevSpace = false
+        for (raw in text) {
+            val c = if (raw == '\n' || raw == '\r' || raw == '\t') ' ' else raw
+            if (c == ' ') {
+                if (prevSpace) continue
+                prevSpace = true
+            } else {
+                prevSpace = false
+            }
+            sb.append(c)
+        }
+        val flat = sb.toString().trim()
+        return if (flat.length <= limit) flat else flat.take(limit) + "…"
+    }
 
     fun decode(raw: String?): MutableList<String> {
         if (raw.isNullOrEmpty()) return mutableListOf()
@@ -89,6 +114,27 @@ object ClipboardStore {
         Prefs.get(context).edit().putString(KEY_HISTORY, encode(list)).apply()
     }
 
+    // —————— 一次性剪贴板候选 ——————
+
+    /** 待展示内容（已规范化；没有则 null） */
+    fun pending(context: Context): String? =
+        Prefs.get(context).getString(KEY_PENDING, null)?.let(::normalize)
+
+    /** 记下一条待展示内容；null = 清空 */
+    fun setPending(context: Context, text: String?) {
+        val t = text?.let(::normalize)
+        val e = Prefs.get(context).edit()
+        if (t == null) e.remove(KEY_PENDING) else e.putString(KEY_PENDING, t)
+        e.apply()
+    }
+
+    /** 取出并消费：候选栏展示一次后就不再出现 */
+    fun takePending(context: Context): String? {
+        val t = pending(context) ?: return null
+        setPending(context, null)
+        return t
+    }
+
     private fun skipOf(context: Context): String? =
         Prefs.get(context).getString(KEY_SKIP, null)
 
@@ -117,6 +163,7 @@ object ClipboardStore {
         val h = history(context)
         if (!h.remove(t)) return false
         saveHistory(context, h)
+        if (pending(context) == t) setPending(context, null)
         if (currentClipboardText(context) == t) setSkip(context, t)
         return true
     }
@@ -157,6 +204,7 @@ object ClipboardStore {
     fun clearHistory(context: Context) {
         // 记住当前系统剪贴板内容：清空后面板再打开时不要把它立刻抓回来
         setSkip(context, currentClipboardText(context))
+        setPending(context, null)
         Prefs.get(context).edit().remove(KEY_HISTORY).apply()
     }
 

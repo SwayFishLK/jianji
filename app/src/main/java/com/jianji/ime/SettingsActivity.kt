@@ -24,6 +24,7 @@ class SettingsActivity : Activity() {
     private lateinit var langValueText: TextView
     private lateinit var vibrateLevelText: TextView
     private lateinit var fuzzyValueText: TextView
+    private lateinit var themeValueText: TextView
 
     /** 正在跳转「开源许可」页（同任务内的正常导航，不算离开设置页） */
     private var navigatingToLicense = false
@@ -39,6 +40,7 @@ class SettingsActivity : Activity() {
         updateLangValue()
         updateVibrateLevelValue()
         updateFuzzyValue()
+        updateThemeValue()
         refreshPhrases()
         refreshClipCount()
     }
@@ -62,6 +64,25 @@ class SettingsActivity : Activity() {
                 ImUi.dp(this@SettingsActivity, 14f), ImUi.dp(this@SettingsActivity, 36f))
         }
         box.addView(ImUi.header(this, "设置") { finish() })
+
+        // —— 外观（v0.5：液态玻璃 8 套皮肤）——
+        box.addView(ImUi.sectionLabel(this, "外观"), ImUi.lp(this, 26f, 14f))
+        themeValueText = ImUi.valueText(this)
+        box.addView(
+            ImUi.cardRow(
+                this,
+                iconRes = R.drawable.ic_theme,
+                title = "键盘主题",
+                subtitle = "液态玻璃 · 8 套 Mirage 配色",
+                right = themeValueText,
+                chevron = true,
+            ) { showThemeDialog() },
+            ImUi.lp(this, 10f),
+        )
+        box.addView(
+            ImUi.note(this, "深色 5 套 / 浅色 3 套；切换后下次弹出键盘即生效，回车键使用加深的主题色。"),
+            ImUi.lp(this, 10f, 14f, 14f),
+        )
 
         // —— 学习语言 ——
         box.addView(ImUi.sectionLabel(this, "学习语言"), ImUi.lp(this, 26f, 14f))
@@ -246,6 +267,31 @@ class SettingsActivity : Activity() {
             setBackgroundColor(ImUi.BG)
             addView(box, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
+    }
+
+    // —————— 键盘主题（v0.5） ——————
+
+    private fun showThemeDialog() {
+        val themes = SkinThemes.all
+        val cur = themes.indexOfFirst { it.id == Prefs.themeId(this) }.coerceAtLeast(0)
+        ImUi.choiceDialog(
+            this,
+            title = "键盘主题",
+            options = themes.map { "${it.name} · ${it.sub}" },
+            checked = BooleanArray(themes.size) { it == cur },
+            multi = false,
+            note = "液态玻璃底片 + 半透明键帽；回车键用更深的主题色，保证一眼能看出颜色。",
+            swatches = themes.map { it.accent },
+            onPick = { which ->
+                Prefs.setThemeId(this, themes[which].id)
+                updateThemeValue()
+            },
+        )
+    }
+
+    private fun updateThemeValue() {
+        if (!::themeValueText.isInitialized) return
+        themeValueText.text = SkinThemes.byId(Prefs.themeId(this)).name
     }
 
     // —————— 学习语言 ——————

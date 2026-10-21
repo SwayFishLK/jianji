@@ -36,6 +36,7 @@ import com.jianji.ime.engine.PinyinEngine
 import com.jianji.ime.keyboard.CandidateBar
 import com.jianji.ime.keyboard.CandidateGridPanel
 import com.jianji.ime.keyboard.ClipboardPanel
+import com.jianji.ime.keyboard.EmailSuffixes
 import com.jianji.ime.keyboard.EmojiPanel
 import com.jianji.ime.keyboard.HideKeyboardButton
 import com.jianji.ime.keyboard.KeyAction
@@ -45,6 +46,7 @@ import com.jianji.ime.keyboard.KeyboardLayouts
 import com.jianji.ime.keyboard.KeyboardView
 import com.jianji.ime.keyboard.OptionsHost
 import com.jianji.ime.keyboard.ShiftState
+import com.jianji.ime.keyboard.SymbolPanel
 import com.jianji.ime.keyboard.ToolButton
 import java.util.Locale
 
@@ -59,8 +61,8 @@ class JianjiImeService : InputMethodService() {
 
     private enum class Page { LETTERS, NUMBERS, SYMBOLS }
 
-    /** 键盘区上方的覆盖面板（互斥）：更多候选 / 剪贴板 / 表情（M4） */
-    private enum class Overlay { NONE, GRID, CLIP, EMOJI }
+    /** 键盘区上方的覆盖面板（互斥）：更多候选 / 剪贴板 / 表情 / 符号（M4 / v0.4.1） */
+    private enum class Overlay { NONE, GRID, CLIP, EMOJI, SYMBOLS }
 
     private lateinit var keyboardView: KeyboardView
 
@@ -93,9 +95,18 @@ class JianjiImeService : InputMethodService() {
         data class Word(val c: Candidate) : BarAction
         data class English(val text: String) : BarAction
         data class Emoji(val text: String) : BarAction
+
+        /** 固定文本（如 @ 后的邮箱后缀）：只上屏，不学习 */
+        data class Fixed(val text: String) : BarAction
+
+        /** 一次性剪贴板候选：上屏完整原文，不学习 */
+        data class Clipboard(val text: String) : BarAction
     }
 
     private var barActions: List<BarAction> = emptyList()
+
+    /** 当前候选栏是否是邮箱后缀 / 剪贴板提示（任意按键输入后清掉） */
+    private var transientBar = false
 
     private var englishMode = false
 
@@ -163,6 +174,7 @@ class JianjiImeService : InputMethodService() {
     private lateinit var gearButton: ToolButton
     private lateinit var clipPanel: ClipboardPanel
     private lateinit var emojiPanel: EmojiPanel
+    private lateinit var symbolPanel: SymbolPanel
 
     /** 候选栏右缩尺寸：显示 / 隐藏（输入中）工具图标行两种 */
     private var barMarginTools = 0
@@ -201,6 +213,7 @@ class JianjiImeService : InputMethodService() {
             when (key) {
                 Prefs.KEY_LEARN_LANG -> onLearnLangChanged()
                 Prefs.KEY_VIBRATE_LEVEL -> rebuildVibration()
+                Prefs.KEY_THEME -> applyTheme()
                 Prefs.KEY_USER_WORDS, Prefs.KEY_PAIRS, Prefs.KEY_PHRASES ->
                     if (!selfPrefWrite) reloadLearn()
             }
@@ -375,7 +388,7 @@ class JianjiImeService : InputMethodService() {
         )
         val base = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(ImTheme.windowBg)
+            background = ImTheme.backdrop()
             addView(
                 optionsZone,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (56 * d).toInt()),
@@ -413,7 +426,19 @@ class JianjiImeService : InputMethodService() {
             onBack = { setOverlay(Overlay.NONE) }
             emojiDict?.let { setCategories(it.cats) }
         }
-        for (panel in arrayOf<View>(gridPanel, clipPanel, emojiPanel)) {
+        symbolPanel = SymbolPanel(this).apply {
+            visibility = View.GONE
+            onPick = { text ->
+                feedback()
+                commitPanelText(text, close = false)
+            }
+            onBack = { setOverlay(Overlay.NONE) }
+            onBackspace = {
+                feedback()
+                onBackspace()
+            }
+        }
+        for (panel in arrayOf<View>(gridPanel, clipPanel, emojiPanel, symbolPanel)) {
             rootView!!.addView(
                 panel,
                 FrameLayout.LayoutParams(
@@ -426,6 +451,24 @@ class JianjiImeService : InputMethodService() {
         return rootView!!
     }
 
+    /**
+     * 主题切换：刷新全局调色板 → 重新铺底片 → 键盘重建键面渐变 → 整棵视图树重绘。
+     * 不重建输入法窗口，设置页选完立刻切回来也能看到新皮肤。
+     */
+    private fun applyTheme() {
+        ImTheme.refresh(this)
+        baseLayout?.background = ImTheme.backdrop()
+        if (::keyboardView.isInitialized) keyboardView.refreshTheme()
+        rootView?.let { invalidateTree(it) }
+    }
+
+    private fun invalidateTree(v: View) {
+        v.invalidate()
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) invalidateTree(v.getChildAt(i))
+        }
+    }
+
     /** 不用全屏抽取模式（横屏时也保持键盘内嵌） */
     override fun onEvaluateFullscreenMode(): Boolean = false
 
@@ -436,8 +479,13 @@ class JianjiImeService : InputMethodService() {
         // 不在这里归位的话会从数字/符号页或表情面板「续开」）
         resetInputState()
         refreshFeedbackFlags()
-        // 键盘显示时顺手抓一下系统剪贴板（Android 10+ 只允许前台 IME 读）
-        ClipboardStore.capture(this, force = false)
+        // 键盘显示时顺手抓一下系统剪贴板（Android 10+ 只允许前台 IME 读）。
+        // 若抓到了历史里没有的新内容（监听器没收到，例如服务重启），补记成一次性候选。
+        if (ClipboardStore.capture(this, force = false)) {
+            ClipboardStore.currentClipboardText(this)?.let { ClipboardStore.setPending(this, it) }
+        }
+        // 复制后第一次唤起键盘：候选栏展示一次（取出即消费，再次唤起不再出现）
+        ClipboardStore.takePending(this)?.let { showClipboardSuggestion(it) }
     }
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
@@ -481,8 +529,12 @@ class JianjiImeService : InputMethodService() {
     // —————— 按键处理 ——————
 
     private fun handleKey(key: KeyDef) {
-        // 剪贴板 / 表情面板展开时，任何按键先收起面板回键盘
-        if (overlay == Overlay.CLIP || overlay == Overlay.EMOJI) setOverlay(Overlay.NONE)
+        // 剪贴板 / 表情 / 符号面板展开时，任何按键先收起面板回键盘
+        if (overlay == Overlay.CLIP || overlay == Overlay.EMOJI || overlay == Overlay.SYMBOLS) {
+            setOverlay(Overlay.NONE)
+        }
+        // 邮箱后缀 / 剪贴板候选只属于上一次操作，按任意键后让位给正常输入
+        clearTransientBar()
         when (key.action) {
             KeyAction.LETTER -> onLetter(key.label)
             KeyAction.TEXT -> onTextKey(key.text)
@@ -497,7 +549,7 @@ class JianjiImeService : InputMethodService() {
 
             KeyAction.PAGE_SYMBOLS -> {
                 page = Page.SYMBOLS
-                keyboardView.showSymbolPage()
+                setOverlay(Overlay.SYMBOLS)
             }
 
             KeyAction.PAGE_LETTERS -> {
@@ -552,8 +604,11 @@ class JianjiImeService : InputMethodService() {
 
     /** 固定文本（标点、数字、符号）：有组句先收尾（中文 = 首选 + 剩余字母；英文 = 原样字母），与搜狗一致 */
     private fun onTextKey(text: String) {
+        clearTransientBar()
         flushAnyComposing()
         currentInputConnection?.commitText(text, 1)
+        // 输入 @ 后直接补常见邮箱后缀（候选栏点选上屏）
+        if (text == "@") showEmailSuffixes()
     }
 
     private fun onSpace() {
@@ -579,6 +634,7 @@ class JianjiImeService : InputMethodService() {
     }
 
     private fun onBackspace() {
+        clearTransientBar()
         if (englishMode && englishBuf.isNotEmpty()) {
             englishBuf.deleteAt(englishBuf.length - 1)
             updateComposing()
@@ -607,8 +663,55 @@ class JianjiImeService : InputMethodService() {
             is BarAction.Word -> commitCandidate(a.c)
             is BarAction.English -> commitHintText(a.text)
             is BarAction.Emoji -> commitHintText(a.text)
+            is BarAction.Fixed -> commitHintText(a.text)
+            is BarAction.Clipboard -> commitHintText(a.text)
             null -> {}
         }
+    }
+
+    /**
+     * 清掉「邮箱后缀 / 剪贴板」这类一次性候选。
+     * 正常组句候选不走这里，由 [updateComposing] / [clearComposing] 管理。
+     */
+    private fun clearTransientBar() {
+        if (!transientBar) return
+        transientBar = false
+        candidateItems = emptyList()
+        barActions = emptyList()
+        if (::candidateBar.isInitialized) candidateBar.clear()
+        if (overlay == Overlay.GRID) setOverlay(Overlay.NONE)
+        updateRightButton()
+    }
+
+    /**
+     * 输入 @ 后补常见邮箱后缀：候选栏点选只上屏后缀（@ 已在输入框里）。
+     * 不进入中文候选 / 学习 / 组句态，下一次按键自动消失。
+     */
+    private fun showEmailSuffixes() {
+        if (!::candidateBar.isInitialized) return
+        val domains = EmailSuffixes.common
+        candidateItems = domains.map { CandidateBar.Item(it) }
+        barActions = domains.map { BarAction.Fixed(it) }
+        transientBar = true
+        candidateBar.setItems(candidateItems)
+        if (overlay == Overlay.GRID) gridPanel.setItems(candidateItems)
+        updateRightButton()
+    }
+
+    /**
+     * 复制后第一次唤起键盘：候选栏显示一条剪贴板候选（只展示一次，取出即消费）。
+     * 点选上屏完整原文；显示文本压成一行并截断，避免一条内容撑满候选栏。
+     */
+    private fun showClipboardSuggestion(text: String) {
+        if (!::candidateBar.isInitialized) return
+        val shown = ClipboardStore.displayText(text)
+        if (shown.isEmpty()) return
+        candidateItems = listOf(CandidateBar.Item(shown, translation = "剪贴板"))
+        barActions = listOf(BarAction.Clipboard(text))
+        transientBar = true
+        candidateBar.setItems(candidateItems)
+        if (overlay == Overlay.GRID) gridPanel.setItems(candidateItems)
+        updateRightButton()
     }
 
     /**
@@ -645,6 +748,8 @@ class JianjiImeService : InputMethodService() {
             is BarAction.Word -> commitCandidate(a.c)
             is BarAction.English -> commitHintText(a.text)
             is BarAction.Emoji -> commitHintText(a.text)
+            is BarAction.Fixed -> commitHintText(a.text)
+            is BarAction.Clipboard -> commitHintText(a.text)
             null -> commitRaw()
         }
     }
@@ -853,6 +958,7 @@ class JianjiImeService : InputMethodService() {
             return
         }
         ic.setComposingText(text, 1)
+        transientBar = false
         if (englishMode) {
             ensureEnglish()
             englishSuggestions = englishDict?.suggest(text, ENGLISH_SUGGEST_LIMIT)
@@ -1046,6 +1152,7 @@ class JianjiImeService : InputMethodService() {
         barActions = emptyList()
         englishSuggestions = emptyList()
         candidateItems = emptyList()
+        transientBar = false
         if (::candidateBar.isInitialized) candidateBar.clear()
         if (overlay == Overlay.GRID) setOverlay(Overlay.NONE)
         // 删光输入后：右上按钮从「更多候选 ˅˅」回到「收起键盘 ˅」，工具图标恢复显示
@@ -1080,8 +1187,9 @@ class JianjiImeService : InputMethodService() {
             emojiButton.active = overlay == Overlay.EMOJI
             // 剪贴板面板打开时整行图标隐藏（面板顶边正好落在图标行上沿；表情/更多候选保持显示）
             rightRow?.visibility = if (overlay == Overlay.CLIP) View.INVISIBLE else View.VISIBLE
-            // 输入中（有组句内容）自动隐藏 [剪贴板][表情][设置]，候选栏占满整个宽度
-            val showTools = pinyin.isEmpty() && englishBuf.isEmpty()
+            // 候选栏只要有内容（组句候选 / 邮箱后缀 / 剪贴板提示）就隐藏
+            // [剪贴板][表情][设置]，把整行宽度让给候选
+            val showTools = pinyin.isEmpty() && englishBuf.isEmpty() && candidateItems.isEmpty()
             val vis = if (showTools) View.VISIBLE else View.GONE
             if (gearButton.visibility != vis) {
                 clipButton.visibility = vis
@@ -1097,9 +1205,15 @@ class JianjiImeService : InputMethodService() {
         }
     }
 
-    /** 键盘上方的覆盖面板互斥切换（更多候选 / 剪贴板 / 表情） */
+    /** 键盘上方的覆盖面板互斥切换（更多候选 / 剪贴板 / 表情 / 符号） */
     private fun setOverlay(next: Overlay) {
+        val leavingSymbols = overlay == Overlay.SYMBOLS && next != Overlay.SYMBOLS
         overlay = next
+        // 符号面板关闭后回到字母页（与原符号页「返回」行为一致，不回到数字页）
+        if (leavingSymbols) {
+            page = Page.LETTERS
+            if (::keyboardView.isInitialized) keyboardView.showLetterPage()
+        }
         // 面板盖在键盘区上：键盘停画（INVISIBLE 保留占位，窗口高度不变），面板底更干净
         if (::keyboardView.isInitialized) {
             keyboardView.visibility = if (next == Overlay.NONE) View.VISIBLE else View.INVISIBLE
@@ -1127,6 +1241,13 @@ class JianjiImeService : InputMethodService() {
             }
             emojiPanel.visibility = if (next == Overlay.EMOJI) View.VISIBLE else View.GONE
         }
+        if (::symbolPanel.isInitialized) {
+            if (next == Overlay.SYMBOLS) {
+                symbolPanel.setCategories(KeyboardLayouts.symbolTabs)
+                syncPanelHeight(symbolPanel)
+            }
+            symbolPanel.visibility = if (next == Overlay.SYMBOLS) View.VISIBLE else View.GONE
+        }
         updateRightButton()
     }
 
@@ -1149,8 +1270,10 @@ class JianjiImeService : InputMethodService() {
     /** 面板里点一条：收尾当前组句后上屏；close = 剪贴板上屏后收起面板（表情可连点不关） */
     private fun commitPanelText(text: String, close: Boolean) {
         val ic = currentInputConnection ?: return
+        clearTransientBar()
         flushAnyComposing()
         ic.commitText(text, 1)
+        if (!close && text == "@") showEmailSuffixes()
         if (close) setOverlay(Overlay.NONE) else updateRightButton()
     }
 
@@ -1159,9 +1282,11 @@ class JianjiImeService : InputMethodService() {
         startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    /** 系统剪贴板变化（Android 10+ 只在允许时回调）：立刻记入历史 */
+    /** 系统剪贴板变化（Android 10+ 只在允许时回调）：立刻记入历史，并留到下次唤起键盘展示一次 */
     private fun onPrimaryClipChanged() {
-        if (ClipboardStore.capture(this, force = true) && overlay == Overlay.CLIP && ::clipPanel.isInitialized) {
+        val changed = ClipboardStore.capture(this, force = true)
+        ClipboardStore.currentClipboardText(this)?.let { ClipboardStore.setPending(this, it) }
+        if (changed && overlay == Overlay.CLIP && ::clipPanel.isInitialized) {
             clipPanel.refresh()
         }
     }

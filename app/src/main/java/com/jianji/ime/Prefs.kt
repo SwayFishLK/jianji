@@ -9,6 +9,16 @@ object Prefs {
 
     const val KEY_VIBRATE = "key_vibrate"
 
+    // —————— v0.5：键盘皮肤（8 套液态玻璃配色） ——————
+
+    const val KEY_THEME = "key_theme"
+
+    fun themeId(context: Context): String =
+        get(context).getString(KEY_THEME, SkinThemes.DEFAULT_ID) ?: SkinThemes.DEFAULT_ID
+
+    fun setThemeId(context: Context, id: String) =
+        get(context).edit().putString(KEY_THEME, id).apply()
+
     fun get(context: Context): SharedPreferences =
         context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 

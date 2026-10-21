@@ -2,7 +2,7 @@ package com.jianji.ime.keyboard
 
 /**
  * 内置布局（参照搜狗 26 键习惯）：
- * - 字母页：字母键上方小字提示长按备选；底排 [收起][123][，][空格][。][中/英][⏎]
+ * - 字母页：字母键上方小字提示长按备选；底排 [收起][123][，/ ,][空格][。/ .][中/英][⏎]
  * - 数字页：左侧 % / - + 竖列、中间 1-9/0 网格、右侧 ⌫ . @，底排返回/符
  * - 符号页：4×4 符号网格 + 右侧 [返回][∧][∨][锁] + 底部分类标签栏
  */
@@ -10,8 +10,11 @@ object KeyboardLayouts {
 
     private fun letter(c: Char) = KeyDef(KeyAction.LETTER, c.toString())
 
-    /** 行宽统一用「权重」控制；各行 sum + pad*2 尽量对齐 */
-    val qwerty: KeyboardLayout by lazy {
+    /**
+     * 字母页底排标点随语言切换：中文 `，`/`。`，英文 `,`/`.`。
+     * 两个布局只差这两个键，避免在 View 里改键帽文本导致长按/上划命中不一致。
+     */
+    private fun lettersLayout(comma: String, period: String): KeyboardLayout =
         KeyboardLayout(
             rows = listOf(
                 KeyRow("qwertyuiop".map { letter(it) }),
@@ -28,9 +31,9 @@ object KeyboardLayouts {
                     listOf(
                         KeyDef(KeyAction.PAGE_SYMBOLS, "符", weight = 1.0f, style = KeyStyle.FN),
                         KeyDef(KeyAction.PAGE_NUMBERS, "123", weight = 1.0f, style = KeyStyle.FN),
-                        KeyDef(KeyAction.TEXT, "，", weight = 1.0f, style = KeyStyle.FN),
+                        KeyDef(KeyAction.TEXT, comma, weight = 1.0f, style = KeyStyle.FN),
                         KeyDef(KeyAction.SPACE, "空格", weight = 2.7f, style = KeyStyle.SPACE),
-                        KeyDef(KeyAction.TEXT, "。", weight = 1.0f, style = KeyStyle.FN),
+                        KeyDef(KeyAction.TEXT, period, weight = 1.0f, style = KeyStyle.FN),
                         KeyDef(KeyAction.LANG_TOGGLE, "中/英", weight = 1.45f, style = KeyStyle.FN),
                         KeyDef(KeyAction.ENTER, "", weight = 1.35f, style = KeyStyle.ACCENT, icon = KeyIcon.ENTER),
                     ),
@@ -38,7 +41,12 @@ object KeyboardLayouts {
                 ),
             ),
         )
-    }
+
+    /** 行宽统一用「权重」控制；各行 sum + pad*2 尽量对齐 */
+    val qwerty: KeyboardLayout by lazy { lettersLayout("，", "。") }
+
+    /** 英文模式字母页（底排 `,` `.`；长按备选不会出现中文标点） */
+    val qwertyEnglish: KeyboardLayout by lazy { lettersLayout(",", ".") }
 
     val numbers: KeyboardLayout by lazy {
         KeyboardLayout(
@@ -106,7 +114,7 @@ object KeyboardLayouts {
         return KeyboardLayout(rows, keyHeight = 42f, tabs = tabNames, tabBarHeight = 36f)
     }
 
-    private val tabNames = listOf("1.常用", "2.中文", "3.英文", "4.网络", "5.数学", "6.更多")
+    private val tabNames = listOf("1.常用", "2.中文", "3.英文", "4.网络", "5.邮箱", "6.数学")
 
     private fun tab(name: String, vararg pages: String): SymbolTab =
         SymbolTab(name, pages.map { symbolPage(tabNames, it) }.toList())
@@ -133,13 +141,13 @@ object KeyboardLayouts {
                 "www. http:// https:// .com .cn .net .org .edu .gov .io .me .tv .top .xyz .app @",
             ),
             tab(
-                "5.数学",
-                "＋ － × ÷ ＝ ≠ ≈ ± ∞ √ ² ³ ½ ¼ ¾",
-                "∑ ∏ ∫ ≤ ≥ ∵ ∴ ∈ ∉ ∪ ∩ ∧ ∨ △ ⊕ ⊗",
+                "5.邮箱",
+                EmailSuffixes.symbols.joinToString(" "),
             ),
             tab(
-                "6.更多",
-                "☆ ★ ♥ ♦ ♣ ♠ ♪ ♫ ☀ ☁ ☂ ☺ ♀ ♂ ✓ ✗",
+                "6.数学",
+                "＋ － × ÷ ＝ ≠ ≈ ± ∞ √ ² ³ ½ ¼ ¾",
+                "∑ ∏ ∫ ≤ ≥ ∵ ∴ ∈ ∉ ∪ ∩ ∧ ∨ △ ⊕ ⊗",
             ),
         )
     }
