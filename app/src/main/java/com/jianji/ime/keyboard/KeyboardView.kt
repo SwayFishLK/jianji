@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -16,6 +17,9 @@ import android.view.View
 import android.view.ViewConfiguration
 import com.jianji.ime.ImTheme
 import java.util.Locale
+
+/** 4 段玻璃键渐变的相对位置（样品 145° 的纵向近似） */
+private val KEY_GRADIENT_STOPS = floatArrayOf(0f, 0.38f, 0.64f, 1f)
 
 /**
  * 长按备选条宿主：由外部（Service）提供显示，弹层显示在按键正上方。
@@ -154,7 +158,8 @@ class KeyboardView @JvmOverloads constructor(
     private val density = resources.displayMetrics.density
     private fun dp(v: Float) = v * density
 
-    private val keyGap = dp(6f)
+    /** 墨夜沿用旧版 6dp 键缝；玻璃主题用更紧凑的 5dp。 */
+    private val keyGap get() = dp(if (ImTheme.isClassic) 6f else 5f)
     private val keyRadius = dp(12f)
     private val padH = dp(8f)
     private val padV = dp(8f)
@@ -197,6 +202,7 @@ class KeyboardView @JvmOverloads constructor(
         strokeCap = Paint.Cap.ROUND
     }
     private val keyGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val keyShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val localRect = RectF()
     private val glowRect = RectF()
 
@@ -205,6 +211,13 @@ class KeyboardView @JvmOverloads constructor(
     private var shaderFn: Shader? = null
     private var shaderAccent: Shader? = null
     private var shaderAccentPressed: Shader? = null
+
+    /** 每个键宽一份「左上角窗光」径向 shader；宽高变化时重建，不在每帧 new。 */
+    private val keySheenShaders = HashMap<Int, Shader>()
+    private val accentSheenShaders = HashMap<Int, Shader>()
+
+    /** 键帽顶部/底部高光的横向渐变 shader；key = 键宽 + 颜色。 */
+    private val lineShaders = HashMap<Long, Shader>()
 
     private val colorAccent get() = ImTheme.accent
     private val colorKeyText get() = ImTheme.keyText
@@ -288,7 +301,9 @@ class KeyboardView @JvmOverloads constructor(
 
     /** 主题切换后重建键面渐变并重绘（不重建输入法窗口）。 */
     fun refreshTheme() {
+        // 墨夜/玻璃的键缝不同，重建后需要重新测量高度。
         rebuild()
+        requestLayout()
         invalidate()
     }
 
@@ -331,11 +346,41 @@ class KeyboardView @JvmOverloads constructor(
      */
     private fun buildKeyShaders() {
         val h = dp(layout.keyHeight)
-        shaderNormal = verticalShader(ImTheme.keyTop, ImTheme.keyBottom, h)
-        shaderNormalPressed = verticalShader(ImTheme.keyPressedTop, ImTheme.keyPressedBottom, h)
-        shaderFn = verticalShader(ImTheme.keyFnTop, ImTheme.keyFnBottom, h)
+        shaderNormal = glassShader(ImTheme.keyGrad, h)
+        shaderNormalPressed = glassShader(ImTheme.keyPressedGrad, h)
+        shaderFn = glassShader(ImTheme.keyFnGrad, h)
         shaderAccent = verticalShader(ImTheme.accentTop, ImTheme.accentBottom, h)
         shaderAccentPressed = verticalShader(ImTheme.accentPressedTop, ImTheme.accentPressedBottom, h)
+        keySheenShaders.clear()
+        accentSheenShaders.clear()
+        lineShaders.clear()
+    }
+
+    /** 样品 key-sheen：120% 100% at 18% 0%，白 .26 → 透明 52%。 */
+    private fun sheenShader(w: Float, strong: Boolean): Shader {
+        val cache = if (strong) accentSheenShaders else keySheenShaders
+        val key = (w * 10f).toInt()
+        return cache.getOrPut(key) {
+            val alpha = when {
+                strong -> if (ImTheme.isLight) 0x75FFFFFF else 0x45FFFFFF
+                ImTheme.isLight -> 0xDBFFFFFF.toInt()
+                else -> 0x42FFFFFF
+            }
+            RadialGradient(
+                w * 0.18f, 0f, (w * 1.2f).coerceAtLeast(dp(30f)),
+                intArrayOf(alpha, alpha and 0x00FFFFFF),
+                floatArrayOf(0f, 0.52f), Shader.TileMode.CLAMP,
+            )
+        }
+    }
+
+    /** 样品 145° 玻璃键的 4 段纵向近似：上高光 → 透明 → 透明 → 底部回光。 */
+    private fun glassShader(colors: IntArray, h: Float): Shader {
+        val c = if (colors.size == 4) colors else intArrayOf(0, 0, 0, 0)
+        return LinearGradient(
+            0f, 0f, 0f, h.coerceAtLeast(1f),
+            c, KEY_GRADIENT_STOPS, Shader.TileMode.CLAMP,
+        )
     }
 
     private fun verticalShader(top: Int, bottom: Int, h: Float): Shader =
@@ -343,6 +388,36 @@ class KeyboardView @JvmOverloads constructor(
             0f, 0f, 0f, h.coerceAtLeast(1f),
             intArrayOf(top, bottom), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP,
         )
+
+    /**
+     * 顶部/底部高光不再是一整条实线：中间亮、左右渐隐，并叠一条更宽的淡光，
+     * 这样才不会像贴了一条白胶带。
+     */
+    private fun lineShader(w: Float, color: Int): Shader {
+        val key = (w.toInt().toLong() shl 32) or (color.toLong() and 0xFFFFFFFFL)
+        return lineShaders.getOrPut(key) {
+            val alpha = (color ushr 24) and 0xFF
+            val faint = (color and 0x00FFFFFF) or ((alpha * 0.34f).toInt() shl 24)
+            val clear = color and 0x00FFFFFF
+            LinearGradient(
+                dp(2f), 0f, (w - dp(2f)).coerceAtLeast(dp(3f)), 0f,
+                intArrayOf(clear, faint, color, faint, clear),
+                floatArrayOf(0f, 0.18f, 0.5f, 0.82f, 1f), Shader.TileMode.CLAMP,
+            )
+        }
+    }
+
+    /** 先画一条略宽的淡光，再压一条 1dp 亮线，得到中间亮、边缘暗的软高光。 */
+    private fun drawSoftLine(canvas: Canvas, w: Float, y: Float, color: Int) {
+        keyHighlightPaint.shader = lineShader(w, color)
+        keyHighlightPaint.strokeWidth = dp(2.4f)
+        keyHighlightPaint.alpha = 90
+        canvas.drawLine(dp(2f), y, w - dp(2f), y, keyHighlightPaint)
+        keyHighlightPaint.strokeWidth = dp(1f)
+        keyHighlightPaint.alpha = 255
+        canvas.drawLine(dp(2f), y, w - dp(2f), y, keyHighlightPaint)
+        keyHighlightPaint.shader = null
+    }
 
     /** 命中判定：最近键，距离不超过容差（键缝也能按到） */
     private fun keyAt(x: Float, y: Float): PlacedKey? {
@@ -402,10 +477,25 @@ class KeyboardView @JvmOverloads constructor(
         if (w <= 0f || h <= 0f) return
 
         val accent = pk.def.style == KeyStyle.ACCENT
+        val fn = pk.def.style == KeyStyle.FN
         val shiftLocked = pk.def.action == KeyAction.SHIFT && shiftState == ShiftState.LOCK
 
         canvas.save()
         canvas.translate(pk.rect.left, pk.rect.top)
+
+        // 墨夜：旧版实色键帽，没有玻璃描边 / 窗光 / 阴影。
+        if (ImTheme.isClassic) {
+            fillPaint.color = when {
+                accent -> if (isPressed) ImTheme.accentPressed else ImTheme.accent
+                isPressed || shiftLocked -> ImTheme.keyPressed
+                fn -> ImTheme.keyFnBg
+                else -> ImTheme.keyBg
+            }
+            localRect.set(0f, 0f, w, h)
+            canvas.drawRoundRect(localRect, keyRadius, keyRadius, fillPaint)
+            canvas.restore()
+            return
+        }
 
         if (accent) {
             glowRect.set(-dp(2f), -dp(1f), w + dp(2f), h + dp(1f))
@@ -422,17 +512,40 @@ class KeyboardView @JvmOverloads constructor(
             pk.def.style == KeyStyle.FN -> shaderFn
             else -> shaderNormal
         }
+
+        // 键帽外沿的软阴影：没有真实背景模糊时，靠这一点点下坠感把玻璃键「托」起来。
+        keyShadowPaint.color = ImTheme.keyShadow
+        localRect.set(dp(0.5f), dp(2f), w - dp(0.5f), h + dp(1.2f))
+        canvas.drawRoundRect(localRect, keyRadius, keyRadius, keyShadowPaint)
+
+        localRect.set(0f, 0f, w, h)
+        canvas.drawRoundRect(localRect, keyRadius, keyRadius, keyFillPaint)
+
+        // 键面左上角的 radial 窗光，是「液态玻璃」和普通半透明块最大的区别。
+        keyFillPaint.shader = sheenShader(w, accent)
         canvas.drawRoundRect(localRect, keyRadius, keyRadius, keyFillPaint)
         keyFillPaint.shader = null
 
-        keyBorderPaint.color = if (accent) ImTheme.accentBorder else ImTheme.keyBorder
+        keyBorderPaint.color = when {
+            accent -> ImTheme.accentBorder
+            fn -> ImTheme.keyFnBorder
+            else -> ImTheme.keyBorder
+        }
         localRect.inset(dp(0.5f), dp(0.5f))
         canvas.drawRoundRect(
             localRect, keyRadius - dp(0.5f), keyRadius - dp(0.5f), keyBorderPaint,
         )
 
-        keyHighlightPaint.color = if (accent) ImTheme.accentBorder else ImTheme.keyHighlight
-        canvas.drawLine(keyRadius, dp(1f), w - keyRadius, dp(1f), keyHighlightPaint)
+        val topLineColor = when {
+            accent -> ImTheme.accentBorder
+            fn -> ImTheme.keyFnHighlight
+            else -> ImTheme.keyHighlight
+        }
+        drawSoftLine(canvas, w, dp(1f), topLineColor)
+
+        // 底部 1px 内侧回光，让键帽下缘也有玻璃厚度，而不是一条硬边。
+        val bottomLineColor = if (accent) 0x40FFFFFF else ImTheme.keyBottomHighlight
+        drawSoftLine(canvas, w, h - dp(1.2f), bottomLineColor)
 
         canvas.restore()
     }
@@ -440,9 +553,10 @@ class KeyboardView @JvmOverloads constructor(
     /** 键面内容（字母/功能字/图标/中英/⇧）：在键帽已绘制之后调用 */
     private fun drawKeyContent(canvas: Canvas, pk: PlacedKey, isShiftActive: Boolean) {
         val def = pk.def
-        val sizeLetter = dp(18f)
-        val sizeGlyph = dp(17f)
-        val sizeFn = dp(14f)
+        val classic = ImTheme.isClassic
+        val sizeLetter = dp(if (classic) 18f else 16.5f)
+        val sizeGlyph = dp(if (classic) 17f else 16.5f)
+        val sizeFn = dp(if (classic) 14f else 12.5f)
 
         val labelColor = when {
             def.style == KeyStyle.ACCENT -> 0xFFFFFFFF.toInt()
@@ -473,6 +587,12 @@ class KeyboardView @JvmOverloads constructor(
         }
 
         textPaint.color = labelColor
+        if (ImTheme.isLight || classic) {
+            textPaint.clearShadowLayer()
+        } else {
+            // 彩色底片上白字需要一点点暗影，否则浅色光斑处会糊。
+            textPaint.setShadowLayer(dp(1f), 0f, dp(0.5f), 0x26000000)
+        }
         textPaint.textSize = when {
             def.action == KeyAction.SHIFT || def.action == KeyAction.BACKSPACE -> sizeGlyph
             def.style == KeyStyle.LETTER -> sizeLetter
@@ -486,12 +606,12 @@ class KeyboardView @JvmOverloads constructor(
         val cx = pk.rect.centerX()
         if (hint != null) {
             textPaint.color = colorHintText
-            textPaint.textSize = dp(10f)
-            canvas.drawText(hint, cx, pk.rect.top + dp(14.5f), textPaint)
+            textPaint.textSize = dp(if (classic) 10f else 8f)
+            canvas.drawText(hint, cx, pk.rect.top + dp(if (classic) 14.5f else 11.5f), textPaint)
             textPaint.textSize = sizeLetter
             textPaint.color = labelColor
         }
-        val cy = pk.rect.centerY() + (if (hint != null) dp(3f) else 0f) -
+        val cy = pk.rect.centerY() + (if (hint != null) dp(if (classic) 3f else 2.5f) else 0f) -
             (textPaint.descent() + textPaint.ascent()) / 2f
         canvas.drawText(label, cx, cy, textPaint)
     }

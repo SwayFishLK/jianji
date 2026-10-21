@@ -75,6 +75,9 @@ class JianjiImeService : InputMethodService() {
     private lateinit var moreButton: HideKeyboardButton
     private lateinit var gridPanel: CandidateGridPanel
     private var overlay = Overlay.NONE
+
+    /** 覆盖面板打开中：上方候选栏 / 图标也临时用墨夜默认色 */
+    private var panelChrome = false
     private var candidateItems: List<CandidateBar.Item> = emptyList()
 
     /** 拼音引擎（词库异步载入，载好前只显示内联拼音） */
@@ -457,8 +460,30 @@ class JianjiImeService : InputMethodService() {
      */
     private fun applyTheme() {
         ImTheme.refresh(this)
+        // 面板打开时不要被主题切换打断：继续保持墨夜默认外观。
+        if (panelChrome) ImTheme.useClassicChrome()
         baseLayout?.background = ImTheme.backdrop()
         if (::keyboardView.isInitialized) keyboardView.refreshTheme()
+        if (::candidateBar.isInitialized) candidateBar.refreshTheme()
+        rootView?.let { invalidateTree(it) }
+    }
+
+    /**
+     * 面板打开/关闭时切换「默认外观」：
+     * 打开 -> 整棵视图临时用墨夜色，候选栏 / 右上图标 / 面板都是旧版默认；
+     * 关闭 -> 恢复用户当前主题。
+     */
+    private fun setPanelChrome(active: Boolean) {
+        if (panelChrome == active) return
+        panelChrome = active
+        if (active) {
+            ImTheme.useClassicChrome()
+        } else {
+            ImTheme.refresh(this)
+        }
+        baseLayout?.background = ImTheme.backdrop()
+        if (::keyboardView.isInitialized) keyboardView.refreshTheme()
+        if (::candidateBar.isInitialized) candidateBar.refreshTheme()
         rootView?.let { invalidateTree(it) }
     }
 
@@ -1208,6 +1233,8 @@ class JianjiImeService : InputMethodService() {
     /** 键盘上方的覆盖面板互斥切换（更多候选 / 剪贴板 / 表情 / 符号） */
     private fun setOverlay(next: Overlay) {
         val leavingSymbols = overlay == Overlay.SYMBOLS && next != Overlay.SYMBOLS
+        // 面板与上方候选栏统一用旧版默认外观；关闭后恢复主题。
+        setPanelChrome(next != Overlay.NONE)
         overlay = next
         // 符号面板关闭后回到字母页（与原符号页「返回」行为一致，不回到数字页）
         if (leavingSymbols) {

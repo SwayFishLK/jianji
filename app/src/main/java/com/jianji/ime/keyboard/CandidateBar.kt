@@ -57,8 +57,9 @@ class CandidateBar(context: Context) : View(context) {
     private val trailingPad = dp(10f)
     private val minCellW = dp(60f)
     private val padH = dp(13f)
-    private val wordSize = dp(18f)
-    private val trSize = dp(10.5f)
+    /** 墨夜沿用旧版候选字号；玻璃主题用更紧凑的字号。 */
+    private val wordSize get() = dp(if (ImTheme.isClassic) 18f else 16.5f)
+    private val trSize get() = dp(if (ImTheme.isClassic) 10.5f else 8.5f)
     private val emojiSize = dp(24f)
 
     private val wordPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -90,6 +91,10 @@ class CandidateBar(context: Context) : View(context) {
         style = Paint.Style.STROKE
         strokeWidth = dp(1f)
     }
+    private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1f)
+    }
     private val pillRect = RectF()
     private val pillRadius = dp(12f)
     private val pillInsetH = dp(2f)
@@ -113,6 +118,20 @@ class CandidateBar(context: Context) : View(context) {
         if (list == items) return
         items.clear()
         items.addAll(list)
+        recomputeWidths()
+        scrollX = 0f
+        scroller.forceFinished(true)
+        invalidate()
+    }
+
+    /** 主题切换后字号可能变化：只重算宽度，保留当前候选与大致滚动位置。 */
+    fun refreshTheme() {
+        recomputeWidths()
+        scrollX = scrollX.coerceIn(0f, maxScroll())
+        invalidate()
+    }
+
+    private fun recomputeWidths() {
         widths.clear()
         shownTr.clear()
         wordPaint.textSize = wordSize
@@ -143,9 +162,6 @@ class CandidateBar(context: Context) : View(context) {
             widths.add(w)
             totalWidth += w + gap
         }
-        scrollX = 0f
-        scroller.forceFinished(true)
-        invalidate()
     }
 
     fun clear() = setItems(emptyList())
@@ -158,8 +174,8 @@ class CandidateBar(context: Context) : View(context) {
         wordPaint.color = ImTheme.candText
         trPaint.color = ImTheme.candTranslation
         emojiPaint.color = ImTheme.candText // 彩色 emoji 用自带颜色；万一系统只有单色字形，也别画成黑色
-        selFill.color = ImTheme.accentAlpha(0x29)
-        selStroke.color = ImTheme.accentAlpha(0x80)
+        selFill.color = ImTheme.accentAlpha(if (ImTheme.isClassic) 0x29 else 0x42)
+        selStroke.color = ImTheme.accentAlpha(if (ImTheme.isClassic) 0x80 else 0x9A)
         wordPaint.textSize = wordSize
         trPaint.textSize = trSize
         var x = leaderPad - scrollX
@@ -199,6 +215,10 @@ class CandidateBar(context: Context) : View(context) {
                 }
             }
             x += w + gap
+        }
+        if (!ImTheme.isClassic) {
+            dividerPaint.color = ImTheme.divider
+            canvas.drawLine(0f, h - dp(0.5f), width.toFloat(), h - dp(0.5f), dividerPaint)
         }
     }
 

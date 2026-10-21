@@ -65,7 +65,7 @@ class SettingsActivity : Activity() {
         }
         box.addView(ImUi.header(this, "设置") { finish() })
 
-        // —— 外观（v0.5：液态玻璃 8 套皮肤）——
+        // —— 外观（4 套液态玻璃 + 旧版墨夜）——
         box.addView(ImUi.sectionLabel(this, "外观"), ImUi.lp(this, 26f, 14f))
         themeValueText = ImUi.valueText(this)
         box.addView(
@@ -73,14 +73,14 @@ class SettingsActivity : Activity() {
                 this,
                 iconRes = R.drawable.ic_theme,
                 title = "键盘主题",
-                subtitle = "液态玻璃 · 8 套 Mirage 配色",
+                subtitle = "4 套液态玻璃 + 墨夜",
                 right = themeValueText,
                 chevron = true,
             ) { showThemeDialog() },
             ImUi.lp(this, 10f),
         )
         box.addView(
-            ImUi.note(this, "深色 5 套 / 浅色 3 套；切换后下次弹出键盘即生效，回车键使用加深的主题色。"),
+            ImUi.note(this, "深渊 / 极光 / 星云 / 余烬 4 套液态玻璃，另加旧版默认「墨夜」（深色部分略压暗）。"),
             ImUi.lp(this, 10f, 14f, 14f),
         )
 
@@ -280,7 +280,7 @@ class SettingsActivity : Activity() {
             options = themes.map { "${it.name} · ${it.sub}" },
             checked = BooleanArray(themes.size) { it == cur },
             multi = false,
-            note = "液态玻璃底片 + 半透明键帽；回车键用更深的主题色，保证一眼能看出颜色。",
+            note = "4 套液态玻璃 + 墨夜；墨夜为旧版实色键帽，背景与键面比旧版略暗。",
             swatches = themes.map { it.accent },
             onPick = { which ->
                 Prefs.setThemeId(this, themes[which].id)
